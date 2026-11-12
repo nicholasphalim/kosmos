@@ -1,0 +1,62 @@
+@import "tailwindcss";
+
+/*
+ * Design tokens Kosmos (dari mockup desain).
+ * Dipakai sebagai utility Tailwind: bg-navy, text-muted, border-line, dst.
+ */
+@theme {
+  --color-navy: #12275a;
+  --color-navy-soft: #2e3a66;
+  --color-lavender: #dccff8;
+  --color-lilac-50: #f6f3fd;
+  --color-lilac-100: #eee7fd;
+  --color-line: #e7e1f5;
+  --color-line-soft: #eee9f8;
+  --color-line-strong: #d5ccec;
+  --color-violet: #4b32a3;
+  --color-violet-400: #8e74d6;
+  --color-violet-300: #b9a8e6;
+  --color-ink: #1b1f2e;
+  --color-muted: #555b78;
+  --color-subtle: #8b8fa8;
+  --color-hero-sub: #c9c0e8;
+
+  --color-ok: #0b5d2f;
+  --color-ok-bg: #d7f2e1;
+  --color-danger: #a1180d;
+  --color-danger-bg: #fde7e4;
+  --color-danger-dot: #d92d20;
+  --color-warn: #7a4100;
+  --color-warn-bg: #fdf0d5;
+  --color-warn-dot: #c77700;
+  --color-info: #1d4f91;
+  --color-info-bg: #e3eefb;
+  --color-info-dot: #4f86c6;
+  --color-neutral-bg: #f1f1f4;
+
+  --color-wa: #1f4e45;
+  --color-wa-chat: #efe9e1;
+  --color-wa-sub: #cfe6e0;
+  --color-wa-tick: #2a7fb8;
+
+  --font-sans: var(--font-jakarta), system-ui, sans-serif;
+  --font-display: var(--font-bricolage), var(--font-jakarta), sans-serif;
+  --font-mono: var(--font-geist-mono), ui-monospace, monospace;
+}
+
+@layer base {
+  html,
+  body {
+    background: var(--color-lilac-50);
+    color: var(--color-navy);
+  }
+
+  :focus-visible {
+    outline: 3px solid var(--color-violet-400);
+    outline-offset: 2px;
+  }
+
+  dialog::backdrop {
+    background: rgb(18 39 90 / 0.45);
+  }
+}
