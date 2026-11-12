@@ -60,7 +60,7 @@ kosmos/
 
 ## Tim
 
-II3120 Layanan Sistem dan Teknologi Informasi, Sekolah Teknik Elektro dan Informatika ITB.
+II3120 Layanan Sistem dan Teknologi Informasi
 
 | Nama | NIM |
 |---|---|
