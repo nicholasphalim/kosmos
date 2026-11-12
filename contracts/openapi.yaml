@@ -1,0 +1,526 @@
+openapi: 3.1.0
+info:
+  title: Kosmos API — Complaint Handling
+  version: 0.1.0
+  description: |
+    Kontrak layanan SOAML proses bisnis Complaint Handling.
+    Tag menunjukkan layer service hasil Deliverable 1:
+    Task (Handle Maintenance Request), Entity (Tenant and Lease, Complaint Ticket),
+    Utility (Media Storage, AI Classification, Notification).
+    Sumber kebenaran untuk tipe frontend (openapi-typescript) dan implementasi FastAPI.
+servers:
+  - url: /api/v1
+security:
+  - bearerAuth: []
+tags:
+  - name: Auth (demo)
+  - name: "Task: Handle Maintenance Request"
+  - name: "Entity: Tenant and Lease"
+  - name: "Entity: Complaint Ticket"
+  - name: "Utility: Media Storage"
+  - name: "Utility: AI Classification"
+  - name: "Utility: Notification"
+
+paths:
+  /auth/demo-accounts:
+    get:
+      tags: [Auth (demo)]
+      operationId: listDemoAccounts
+      security: []
+      summary: Daftar akun demo untuk halaman login
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/AkunDemo" }
+
+  /auth/demo-login:
+    post:
+      tags: [Auth (demo)]
+      operationId: demoLogin
+      security: []
+      summary: Masuk sebagai akun demo dan menerima token JWT
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/DemoLoginRequest" }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/LoginResponse" }
+        "404": { $ref: "#/components/responses/Error" }
+
+  /hmr/keluhan:
+    post:
+      tags: ["Task: Handle Maintenance Request"]
+      operationId: ajukanKeluhan
+      summary: Ajukan keluhan (orkestrasi validasi sewa, media, tiket, klasifikasi AI, notifikasi)
+      description: |
+        Operasi Add Keluhan (non-agnostic). Mengembalikan hasil "diterima" (201) beserta tiket,
+        atau "ditolak" (200) bila sewa unit tidak aktif. Field trace berisi jejak pemanggilan service.
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema: { $ref: "#/components/schemas/KeluhanRequest" }
+      responses:
+        "201":
+          description: Keluhan diterima dan tiket dibuat
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/KeluhanResponse" }
+        "200":
+          description: Keluhan ditolak (sewa tidak aktif)
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/KeluhanResponse" }
+        "401": { $ref: "#/components/responses/Error" }
+        "403": { $ref: "#/components/responses/Error" }
+        "422": { $ref: "#/components/responses/Error" }
+
+  /hmr/tiket/{id_tiket}/status:
+    post:
+      tags: ["Task: Handle Maintenance Request"]
+      operationId: ubahStatusTiket
+      summary: Ubah status tiket lalu kirim notifikasi ke penghuni dan pemilik
+      parameters:
+        - $ref: "#/components/parameters/IdTiket"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/UbahStatusRequest" }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/TiketDetail" }
+        "403": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+        "409": { $ref: "#/components/responses/Error" }
+
+  /hmr/tiket/{id_tiket}/klasifikasi-ulang:
+    post:
+      tags: ["Task: Handle Maintenance Request"]
+      operationId: klasifikasiUlang
+      summary: Jalankan ulang klasifikasi AI untuk tiket berstatus "dibuat"
+      parameters:
+        - $ref: "#/components/parameters/IdTiket"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/TiketDetail" }
+        "404": { $ref: "#/components/responses/Error" }
+        "409": { $ref: "#/components/responses/Error" }
+
+  /penghuni/me:
+    get:
+      tags: ["Entity: Tenant and Lease"]
+      operationId: getPenghuniSaya
+      summary: Get ID Penghuni + Get ID Unit untuk pengguna yang login
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ProfilPenghuni" }
+        "401": { $ref: "#/components/responses/Error" }
+        "403": { $ref: "#/components/responses/Error" }
+
+  /unit/{id_unit}/sewa:
+    get:
+      tags: ["Entity: Tenant and Lease"]
+      operationId: getStatusSewa
+      summary: Get Status Sewa sebuah unit
+      parameters:
+        - name: id_unit
+          in: path
+          required: true
+          schema: { type: integer }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/StatusSewa" }
+        "404": { $ref: "#/components/responses/Error" }
+
+  /tiket:
+    get:
+      tags: ["Entity: Complaint Ticket"]
+      operationId: listTiket
+      summary: Daftar tiket (penghuni melihat miliknya, pemilik melihat properti miliknya)
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/TiketRingkas" }
+
+  /tiket/{id_tiket}:
+    get:
+      tags: ["Entity: Complaint Ticket"]
+      operationId: getTiket
+      summary: Get Tiket beserta keluhan, lampiran, dan riwayat status
+      parameters:
+        - $ref: "#/components/parameters/IdTiket"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/TiketDetail" }
+        "404": { $ref: "#/components/responses/Error" }
+
+  /keluhan/{id_keluhan}:
+    get:
+      tags: ["Entity: Complaint Ticket"]
+      operationId: getKeluhan
+      summary: Get Keluhan
+      parameters:
+        - name: id_keluhan
+          in: path
+          required: true
+          schema: { type: integer }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Keluhan" }
+        "404": { $ref: "#/components/responses/Error" }
+
+  /media:
+    post:
+      tags: ["Utility: Media Storage"]
+      operationId: addLampiranMedia
+      summary: Simpan satu file media dan kembalikan URL-nya
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [file]
+              properties:
+                file: { type: string, format: binary }
+      responses:
+        "201":
+          description: Tersimpan
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Lampiran" }
+        "422": { $ref: "#/components/responses/Error" }
+
+  /klasifikasi:
+    post:
+      tags: ["Utility: AI Classification"]
+      operationId: classifyKeluhan
+      summary: Klasifikasi kategori dan urgensi dari teks dan gambar
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/KlasifikasiRequest" }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/KlasifikasiResponse" }
+
+  /notifikasi:
+    get:
+      tags: ["Utility: Notification"]
+      operationId: listNotifikasiSaya
+      summary: Outbox notifikasi untuk pengguna yang login
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/Notifikasi" }
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  parameters:
+    IdTiket:
+      name: id_tiket
+      in: path
+      required: true
+      schema: { type: integer }
+
+  responses:
+    Error:
+      description: Error
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/ErrorResponse" }
+
+  schemas:
+    Role:
+      type: string
+      enum: [penghuni, pemilik]
+    StatusTiket:
+      type: string
+      enum: [dibuat, diklasifikasi, diproses, selesai, dibatalkan]
+    Kategori:
+      type: string
+      enum: [AC, listrik, air, lainnya]
+    Urgensi:
+      type: string
+      enum: [rendah, sedang, tinggi]
+    Layer:
+      type: string
+      enum: [Task, Entity, Utility]
+
+    ErrorResponse:
+      type: object
+      required: [error]
+      properties:
+        error:
+          type: object
+          required: [kode, pesan]
+          properties:
+            kode: { type: string, examples: [SEWA_TIDAK_AKTIF] }
+            pesan: { type: string }
+
+    Pengguna:
+      type: object
+      required: [id, nama, role]
+      properties:
+        id: { type: integer }
+        nama: { type: string }
+        role: { $ref: "#/components/schemas/Role" }
+
+    AkunDemo:
+      type: object
+      required: [pengguna, keterangan, label_sewa]
+      properties:
+        pengguna: { $ref: "#/components/schemas/Pengguna" }
+        keterangan: { type: string, examples: ["Kos Melati · A-101"] }
+        label_sewa:
+          type: string
+          enum: [aktif, berakhir, pemilik]
+        jumlah_properti: { type: [integer, "null"] }
+
+    DemoLoginRequest:
+      type: object
+      required: [id_pengguna]
+      properties:
+        id_pengguna: { type: integer }
+
+    LoginResponse:
+      type: object
+      required: [token, pengguna]
+      properties:
+        token: { type: string }
+        pengguna: { $ref: "#/components/schemas/Pengguna" }
+
+    UnitRingkas:
+      type: object
+      required: [id, nomor_unit, nama_properti]
+      properties:
+        id: { type: integer }
+        nomor_unit: { type: string, examples: [A-101] }
+        nama_properti: { type: string, examples: [Kos Melati] }
+
+    StatusSewa:
+      type: object
+      required: [id_unit, status_sewa, tanggal_mulai, tanggal_selesai]
+      properties:
+        id_unit: { type: integer }
+        status_sewa:
+          type: string
+          enum: [aktif, tidak_aktif]
+        tanggal_mulai: { type: string, format: date }
+        tanggal_selesai: { type: string, format: date }
+
+    ProfilPenghuni:
+      type: object
+      required: [pengguna, unit, sewa]
+      properties:
+        pengguna: { $ref: "#/components/schemas/Pengguna" }
+        unit: { $ref: "#/components/schemas/UnitRingkas" }
+        sewa: { $ref: "#/components/schemas/StatusSewa" }
+
+    KeluhanRequest:
+      type: object
+      required: [deskripsi]
+      properties:
+        deskripsi: { type: string, minLength: 10, maxLength: 1000 }
+        lampiran:
+          type: array
+          maxItems: 3
+          items: { type: string, format: binary }
+
+    Lampiran:
+      type: object
+      required: [id, url, nama_file, mime, ukuran_byte]
+      properties:
+        id: { type: integer }
+        url: { type: string }
+        nama_file: { type: string }
+        mime: { type: string, examples: [image/jpeg, video/mp4] }
+        ukuran_byte: { type: integer }
+
+    Keluhan:
+      type: object
+      required: [id, kode, id_penghuni, id_unit, deskripsi, status, alasan_penolakan, lampiran, created_at]
+      properties:
+        id: { type: integer }
+        kode: { type: string, examples: [KLH-0101] }
+        id_penghuni: { type: integer }
+        id_unit: { type: integer }
+        deskripsi: { type: string }
+        status:
+          type: string
+          enum: [diterima, ditolak]
+        alasan_penolakan: { type: [string, "null"] }
+        lampiran:
+          type: array
+          items: { $ref: "#/components/schemas/Lampiran" }
+        created_at: { type: string, format: date-time }
+
+    TiketRingkas:
+      type: object
+      required: [id, kode, judul, status, kategori, urgensi, perlu_review, unit, penghuni, created_at, updated_at]
+      properties:
+        id: { type: integer }
+        kode: { type: string, examples: [TKT-0055] }
+        judul: { type: string, examples: ["AC tidak dingin, air menetes"] }
+        status: { $ref: "#/components/schemas/StatusTiket" }
+        kategori:
+          oneOf:
+            - $ref: "#/components/schemas/Kategori"
+            - type: "null"
+        urgensi:
+          oneOf:
+            - $ref: "#/components/schemas/Urgensi"
+            - type: "null"
+        perlu_review: { type: boolean }
+        unit: { $ref: "#/components/schemas/UnitRingkas" }
+        penghuni: { $ref: "#/components/schemas/Pengguna" }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+
+    RiwayatStatus:
+      type: object
+      required: [dari, ke, waktu, oleh]
+      properties:
+        dari:
+          oneOf:
+            - $ref: "#/components/schemas/StatusTiket"
+            - type: "null"
+        ke: { $ref: "#/components/schemas/StatusTiket" }
+        waktu: { type: string, format: date-time }
+        oleh: { type: string, examples: [sistem, Pak Hendra] }
+
+    TiketDetail:
+      allOf:
+        - $ref: "#/components/schemas/TiketRingkas"
+        - type: object
+          required: [keluhan, ai_confidence, ai_alasan, riwayat]
+          properties:
+            keluhan: { $ref: "#/components/schemas/Keluhan" }
+            ai_confidence: { type: [number, "null"], minimum: 0, maximum: 1 }
+            ai_alasan: { type: [string, "null"] }
+            riwayat:
+              type: array
+              items: { $ref: "#/components/schemas/RiwayatStatus" }
+
+    TraceStep:
+      type: object
+      required: [service, layer, operasi, ok, ms]
+      properties:
+        service: { type: string, examples: [Tenant and Lease] }
+        layer: { $ref: "#/components/schemas/Layer" }
+        operasi: { type: string, examples: ["getStatusSewa(unit=7) → aktif"] }
+        ok: { type: boolean }
+        ms: { type: number }
+
+    KeluhanResponse:
+      type: object
+      required: [hasil, keluhan, tiket, alasan, warning, trace]
+      properties:
+        hasil:
+          type: string
+          enum: [diterima, ditolak]
+        keluhan: { $ref: "#/components/schemas/Keluhan" }
+        tiket:
+          oneOf:
+            - $ref: "#/components/schemas/TiketDetail"
+            - type: "null"
+        alasan: { type: [string, "null"], description: Alasan penolakan bila ditolak }
+        sewa:
+          oneOf:
+            - $ref: "#/components/schemas/StatusSewa"
+            - type: "null"
+        warning: { type: [string, "null"], description: "Contoh: klasifikasi AI gagal, tiket tetap dibuat" }
+        trace:
+          type: array
+          items: { $ref: "#/components/schemas/TraceStep" }
+
+    UbahStatusRequest:
+      type: object
+      required: [status]
+      properties:
+        status:
+          type: string
+          enum: [diproses, dibatalkan]
+
+    KlasifikasiRequest:
+      type: object
+      required: [teks]
+      properties:
+        teks: { type: string }
+        media_url:
+          type: array
+          items: { type: string }
+
+    KlasifikasiResponse:
+      type: object
+      required: [kategori, urgensi, confidence, alasan, judul]
+      properties:
+        kategori: { $ref: "#/components/schemas/Kategori" }
+        urgensi: { $ref: "#/components/schemas/Urgensi" }
+        confidence: { type: number, minimum: 0, maximum: 1 }
+        alasan: { type: string }
+        judul: { type: string, description: Ringkasan singkat keluhan untuk judul tiket }
+
+    Notifikasi:
+      type: object
+      required: [id, kode_tiket, jenis, isi, kanal, no_tujuan, status_kirim, created_at]
+      properties:
+        id: { type: integer }
+        kode_tiket: { type: string }
+        jenis:
+          type: string
+          enum: [tiket_dibuat, diklasifikasi, prioritas_tinggi, diproses, dibatalkan]
+        isi: { type: string }
+        kanal:
+          type: string
+          enum: [whatsapp]
+        no_tujuan: { type: string }
+        status_kirim:
+          type: string
+          enum: [terkirim, gagal]
+        created_at: { type: string, format: date-time }
