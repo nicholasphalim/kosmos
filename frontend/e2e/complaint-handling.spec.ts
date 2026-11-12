@@ -1,3 +1,5 @@
+import { execSync } from "node:child_process";
+import { rmSync } from "node:fs";
 import { expect, test, type Page } from "@playwright/test";
 
 /** Satu konteks browser per tes = localStorage bersih = data seed baru. */
@@ -89,4 +91,38 @@ test("Guard: penghuni tidak bisa membuka dashboard pemilik", async ({ page }) =>
   await expect(page).toHaveURL(/\/penghuni\/lapor/);
   await page.goto("/pemilik");
   await expect(page).toHaveURL(/\/penghuni\/lapor/);
+});
+
+test("Reset data demo lewat tombol di halaman login", async ({ page }) => {
+  await masukSebagai(page, "Pak Derren");
+  const baris = page.getByRole("main").getByRole("listitem").filter({ hasText: "TKT-0057" });
+  await baris.getByRole("button", { name: "Tandai diproses" }).click();
+  await expect(baris).toBeHidden({ timeout: 10_000 });
+
+  await page.getByRole("button", { name: "Keluar" }).click();
+  page.once("dialog", (d) => d.accept());
+  await page.getByRole("button", { name: "Reset data demo" }).click();
+
+  await masukSebagai(page, "Pak Derren");
+  await expect(
+    page.getByRole("main").getByRole("listitem").filter({ hasText: "TKT-0057" }).getByRole("button", { name: "Tandai diproses" }),
+  ).toBeVisible();
+});
+
+test("Reset data demo lewat terminal (npm run demo:reset)", async ({ page }) => {
+  await masukSebagai(page, "Dea");
+  await expect(page).toHaveURL(/\/penghuni\/lapor/);
+
+  execSync("node scripts/reset-demo.mjs");
+  try {
+    await page.reload();
+    await expect(page).toHaveURL(/\/login/, { timeout: 10_000 });
+    await expect(page.getByRole("heading", { name: "Masuk sebagai" })).toBeVisible();
+    // Sinyal yang sama tidak me-reset dua kali.
+    await masukSebagai(page, "Dea");
+    await page.reload();
+    await expect(page).toHaveURL(/\/penghuni\/lapor/);
+  } finally {
+    rmSync(".demo-reset", { force: true });
+  }
 });

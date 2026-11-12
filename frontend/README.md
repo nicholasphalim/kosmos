@@ -7,12 +7,14 @@ Rencana lengkap: [../docs/IMPLEMENTATION_PLAN.md](../docs/IMPLEMENTATION_PLAN.md
 
 ```bash
 npm install
-cp .env.example .env.local   # default: mode mock
 npm run dev                  # http://localhost:3000
 ```
 
 Mode mock tidak butuh backend: request API dicegat MSW (service worker) dan dijawab oleh `src/mocks`.
-Data demo disimpan di localStorage. Untuk mengembalikan data awal, jalankan `kosmosResetDemo()` di console browser.
+Data demo disimpan di localStorage browser. Untuk mengembalikan data awal, pilih salah satu:
+
+- Terminal: `npm run demo:reset`, lalu refresh halaman Kosmos di browser.
+- Tombol **Reset data demo** di bawah daftar akun pada halaman login.
 
 ## Script
 
@@ -23,7 +25,8 @@ Data demo disimpan di localStorage. Untuk mengembalikan data awal, jalankan `kos
 | `npm run gen:api` | Generate tipe TypeScript dari `../contracts/openapi.yaml` |
 | `npm run typecheck` | Cek tipe (dipakai juga untuk mendeteksi kontrak yang bergeser) |
 | `npm run lint` | ESLint |
-| `npm run test:e2e` | Playwright: 6 skenario demo (build dulu dengan `npm run build`) |
+| `npm run demo:reset` | Kembalikan data demo ke kondisi awal (refresh browser setelahnya) |
+| `npm run test:e2e` | Playwright: 8 skenario (build dulu dengan `npm run build`) |
 
 ## Struktur
 
