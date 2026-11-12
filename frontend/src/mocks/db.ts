@@ -242,7 +242,3 @@ export function commit() {
   }
 }
 
-export function resetDb() {
-  instance = seed();
-  commit();
-}

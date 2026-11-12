@@ -1,7 +1,7 @@
 "use client";
 
 import { clsx } from "clsx";
-import { Check, ChevronRight, House, Lock, User, X, Building, type LucideIcon } from "lucide-react";
+import { Check, ChevronRight, House, Lock, RotateCcw, User, X, Building, type LucideIcon } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useEffect } from "react";
 import { PlanetHouseArt } from "@/components/brand/Art";
@@ -10,6 +10,8 @@ import { BERANDA_ROLE } from "@/components/layout/RoleGuard";
 import { ErrorState, Skeleton } from "@/components/ui/States";
 import { useAkunDemo, useDemoLogin } from "@/lib/api/hooks";
 import type { AkunDemo } from "@/lib/api/types";
+import { config } from "@/lib/config";
+import { resetDemo } from "@/lib/demoReset";
 import { inisial } from "@/lib/format";
 import { useSession } from "@/lib/session";
 
@@ -115,6 +117,21 @@ export default function LoginPage() {
               </ul>
             </section>
           ))}
+
+          {config.apiMode === "mock" && (
+            <button
+              type="button"
+              onClick={() => {
+                if (window.confirm("Kembalikan semua data demo ke kondisi awal? Tiket dan pesan yang dibuat akan hilang.")) {
+                  resetDemo();
+                }
+              }}
+              className="flex h-11 cursor-pointer items-center justify-center gap-2 self-center rounded-xl px-3.5 text-sm font-semibold text-muted hover:bg-lilac-100 hover:text-navy"
+            >
+              <RotateCcw className="size-4" aria-hidden />
+              Reset data demo
+            </button>
+          )}
         </div>
       </main>
     </div>
