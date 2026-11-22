@@ -1,9 +1,9 @@
 import { clsx } from "clsx";
-import { Check, FilePlus, Sparkles, Wrench, X, type LucideIcon } from "lucide-react";
+import { Check, FilePlus, Sparkles, Wrench, X, type IkonKosmos } from "@/components/icons";
 import type { RiwayatStatus, StatusTiket } from "@/lib/api/types";
 import { jamSaja, LABEL_STATUS } from "@/lib/format";
 
-const ALUR: Array<{ status: StatusTiket; icon: LucideIcon }> = [
+const ALUR: Array<{ status: StatusTiket; icon: IkonKosmos }> = [
   { status: "dibuat", icon: FilePlus },
   { status: "diklasifikasi", icon: Sparkles },
   { status: "diproses", icon: Wrench },
@@ -41,7 +41,7 @@ export function StatusStepper({ status, riwayat }: { status: StatusTiket; riwaya
 
   const posisi = ALUR.findIndex((a) => a.status === status);
   return (
-    <ol className="grid grid-cols-4">
+    <ol className="grid grid-cols-[1fr_1fr_1fr_auto]">
       {ALUR.map((a, i) => {
         const tahap: Tahap = i < posisi ? "done" : i === posisi ? "now" : "todo";
         const g = GAYA[tahap];

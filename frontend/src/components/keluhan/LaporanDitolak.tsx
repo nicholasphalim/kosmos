@@ -1,8 +1,9 @@
-import { ArrowLeft, CalendarX, House } from "lucide-react";
+import { ArrowLeft, CalendarX, House } from "@/components/icons";
 import { Button } from "@/components/ui/Button";
 import { ServiceTrace } from "@/components/tiket/ServiceTrace";
 import type { KeluhanResponse, UnitRingkas } from "@/lib/api/types";
 import { tanggal } from "@/lib/format";
+import { Stiker } from "@/components/ui/Stiker";
 
 /** Hasil cabang BPMN "Sewa aktif? Tidak": keluhan ditolak, tidak ada tiket. */
 export function LaporanDitolak({
@@ -15,13 +16,13 @@ export function LaporanDitolak({
   onKembali: () => void;
 }) {
   return (
-    <main className="mx-auto flex max-w-[640px] flex-col gap-6 px-6 pt-14 pb-18">
-      <section className="flex flex-col items-center gap-5 rounded-[28px] border border-line bg-white p-8 text-center sm:p-10">
+    <main className="page-rise mx-auto flex max-w-[680px] flex-col gap-6 px-3 pt-10 pb-18 sm:px-6">
+      <section className="flex flex-col items-center gap-5 panel p-8 text-center sm:p-10">
         <span aria-hidden className="flex size-24 items-center justify-center rounded-[32px] bg-danger-bg text-danger">
           <CalendarX className="size-11" strokeWidth={1.9} />
         </span>
         <div className="flex flex-col gap-2">
-          <h1 className="font-display text-[40px] leading-[1.05] font-extrabold tracking-[-0.04em]">Sewa kamu sudah berakhir</h1>
+          <h1 className="display text-[clamp(2.25rem,5vw,3.25rem)]">Sewa kamu sudah berakhir</h1>
           <p className="text-[17px] text-muted">Laporan hanya bisa dikirim selama sewa aktif. Tidak ada tiket yang dibuat.</p>
         </div>
 
@@ -33,7 +34,7 @@ export function LaporanDitolak({
             <span className="text-[15px] font-bold">{unit ? `${unit.nama_properti} · ${unit.nomor_unit}` : "Unit kamu"}</span>
             {hasil.sewa && <span className="text-sm text-muted">Berakhir {tanggal(hasil.sewa.tanggal_selesai)}</span>}
           </span>
-          <span className="rounded-full bg-danger-bg px-2.5 py-1 text-[13px] font-bold whitespace-nowrap text-danger">Tidak aktif</span>
+          <Stiker varian="berakhir">Tidak aktif</Stiker>
         </div>
 
         <span className="font-mono text-xs text-muted">Keluhan {hasil.keluhan.kode} dicatat sebagai ditolak</span>

@@ -1,8 +1,9 @@
 "use client";
 
 import { clsx } from "clsx";
-import { Search } from "lucide-react";
-import { prioritasDot } from "@/components/tiket/Badges";
+import { Search } from "@/components/icons";
+import { Ticket } from "@/components/icons";
+import { IKON_STIKER } from "@/components/ui/Stiker";
 import type { FilterUrgensi, TabPemilik } from "@/lib/tiketFilter";
 import { TAB_PEMILIK } from "@/lib/tiketFilter";
 
@@ -27,7 +28,7 @@ export function TiketFilterBar({ tab, urgensi, cari, jumlah, onTab, onUrgensi, o
   return (
     <div className="flex flex-col gap-4 px-6 pt-5">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <div role="group" aria-label="Saring status" className="flex flex-wrap gap-1 rounded-[14px] bg-lilac-50 p-1">
+        <div role="group" aria-label="Saring status" className="flex flex-wrap gap-1 rounded-[26px] bg-lilac-100/70 p-1">
           {TAB_PEMILIK.map((t) => {
             const aktif = t.id === tab;
             return (
@@ -37,7 +38,7 @@ export function TiketFilterBar({ tab, urgensi, cari, jumlah, onTab, onUrgensi, o
                 aria-pressed={aktif}
                 onClick={() => onTab(t.id)}
                 className={clsx(
-                  "flex h-10 cursor-pointer items-center gap-2 rounded-[10px] px-3.5 text-sm font-bold",
+                  "flex h-10 cursor-pointer items-center gap-2 rounded-full px-4 transition-colors duration-200 text-sm font-bold",
                   aktif ? "bg-white text-navy shadow-[0_1px_3px_rgba(18,39,90,0.12)]" : "text-muted hover:text-navy",
                 )}
               >
@@ -55,7 +56,7 @@ export function TiketFilterBar({ tab, urgensi, cari, jumlah, onTab, onUrgensi, o
           })}
         </div>
 
-        <div className="relative flex items-center">
+        <div className="relative flex w-full items-center sm:w-auto">
           <Search className="pointer-events-none absolute left-3 size-4.5 text-muted" aria-hidden />
           <label htmlFor="cari-tiket" className="sr-only">
             Cari tiket
@@ -66,7 +67,7 @@ export function TiketFilterBar({ tab, urgensi, cari, jumlah, onTab, onUrgensi, o
             value={cari}
             onChange={(e) => onCari(e.target.value)}
             placeholder="Cari unit atau nama"
-            className="h-11 w-[230px] rounded-xl border-[1.5px] border-line bg-white pr-3.5 pl-10 text-[15px] text-navy placeholder:text-subtle"
+            className="h-11 w-full min-w-[200px] rounded-full border border-line-strong bg-white/80 transition-[border-color,box-shadow] duration-200 focus:border-violet-400 focus:shadow-[0_0_0_4px_#8a6ff029] focus:outline-none sm:w-[240px] pr-3.5 pl-10 text-[15px] text-navy placeholder:text-subtle"
           />
         </div>
       </div>
@@ -74,6 +75,7 @@ export function TiketFilterBar({ tab, urgensi, cari, jumlah, onTab, onUrgensi, o
       <div role="group" aria-label="Saring prioritas" className="flex flex-wrap gap-2 border-b border-line-soft pb-4">
         {URGENSI.map((u) => {
           const aktif = u.id === urgensi;
+          const Ikon = u.id === "semua" ? Ticket : IKON_STIKER[u.id];
           return (
             <button
               key={u.id}
@@ -81,17 +83,11 @@ export function TiketFilterBar({ tab, urgensi, cari, jumlah, onTab, onUrgensi, o
               aria-pressed={aktif}
               onClick={() => onUrgensi(u.id)}
               className={clsx(
-                "flex h-9 cursor-pointer items-center gap-1.5 rounded-full border-[1.5px] px-3 text-[13px] font-bold",
+                "flex h-9 cursor-pointer items-center gap-1.5 rounded-full border transition-colors duration-200 px-3 text-[13px] font-bold",
                 aktif ? "border-navy bg-navy text-white" : "border-line bg-white text-navy hover:border-line-strong",
               )}
             >
-              <span
-                aria-hidden
-                className={clsx(
-                  "size-2 rounded-full",
-                  u.id === "semua" ? (aktif ? "bg-lavender" : "bg-violet-400") : prioritasDot(u.id),
-                )}
-              />
+              <Ikon className="size-5" />
               {u.label}
             </button>
           );

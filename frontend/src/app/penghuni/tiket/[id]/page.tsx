@@ -1,6 +1,6 @@
 "use client";
 
-import { Check, CirclePlus, Ticket, TriangleExclamationPoint } from "lucide-react";
+import { Check, CirclePlus, Ticket, TriangleExclamationPoint } from "@/components/icons";
 import { useParams, useSearchParams } from "next/navigation";
 import { SparkleCluster } from "@/components/brand/Art";
 import { ServiceTrace } from "@/components/tiket/ServiceTrace";
@@ -18,18 +18,18 @@ export default function TiketDetailPage() {
   const trace = useTraceTiket(idTiket);
 
   return (
-    <main className="mx-auto flex max-w-[808px] flex-col gap-6 px-6 pt-10 pb-16">
+    <main className="page-rise mx-auto flex max-w-[860px] flex-col gap-6 px-3 pt-8 pb-16 sm:px-6">
       {baru && tiket.data && (
-        <section className="relative flex flex-wrap items-center gap-6 overflow-hidden rounded-[28px] bg-lavender px-8 py-9 sm:px-10">
+        <section className="relative flex flex-wrap items-center gap-6 overflow-hidden rounded-[28px] bg-lavender px-8 py-9 text-navy sm:px-10">
           <SparkleCluster
-            className="pointer-events-none absolute top-0 right-5 w-[220px]"
+            className="pointer-events-none absolute top-2 right-4 hidden w-[130px] md:block"
             tones={["#ffffff", "var(--color-violet-300)", "var(--color-navy)"]}
           />
           <span aria-hidden className="relative flex size-18 items-center justify-center rounded-3xl bg-navy text-lavender">
             <Check className="size-9" strokeWidth={2.6} />
           </span>
           <div className="relative flex flex-col gap-1.5">
-            <h1 className="font-display text-[44px] leading-none font-extrabold tracking-[-0.04em]">Laporan diterima</h1>
+            <h1 className="display text-[clamp(2.5rem,6vw,4rem)]">Laporan diterima</h1>
             <p className="text-[17px] text-navy-soft">Pemilik sudah dikabari lewat WhatsApp.</p>
           </div>
         </section>
@@ -42,7 +42,7 @@ export default function TiketDetailPage() {
         </p>
       )}
 
-      {!baru && <h1 className="font-display text-[34px] font-extrabold tracking-[-0.03em]">Detail tiket</h1>}
+      {!baru && <h1 className="display text-[clamp(2.5rem,6vw,4rem)]">Detail tiket</h1>}
 
       {tiket.isPending && <Skeleton className="h-[520px] rounded-3xl" />}
       {tiket.isError && (

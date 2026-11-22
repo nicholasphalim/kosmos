@@ -1,10 +1,11 @@
 "use client";
 
-import { MessageCircle, X } from "lucide-react";
+import { MessageCircle, X } from "@/components/icons";
 import { useRef } from "react";
 import type { Pengguna } from "@/lib/api/types";
 import { useOutbox } from "./useOutbox";
 import { WhatsAppPhone } from "./WhatsAppPhone";
+import { Stiker } from "@/components/ui/Stiker";
 
 /** Tombol header + dialog berisi outbox WhatsApp (simulasi) milik pengguna. */
 export function OutboxButton({ pengguna }: { pengguna: Pengguna }) {
@@ -22,7 +23,7 @@ export function OutboxButton({ pengguna }: { pengguna: Pengguna }) {
         type="button"
         onClick={buka}
         aria-label={belumDibaca ? `Pesan WhatsApp, ${belumDibaca} baru` : "Pesan WhatsApp"}
-        className="relative flex size-11 cursor-pointer items-center justify-center rounded-xl border border-line bg-white text-navy hover:bg-lilac-50"
+        className="relative flex size-11 cursor-pointer items-center justify-center rounded-full border border-line bg-white text-navy transition-colors duration-200 hover:bg-lilac-100"
       >
         <MessageCircle className="size-5" aria-hidden />
         {belumDibaca > 0 && (
@@ -46,7 +47,7 @@ export function OutboxButton({ pengguna }: { pengguna: Pengguna }) {
               WhatsApp Outbox
             </h2>
             <span className="flex items-center gap-2">
-              <span className="rounded-full bg-lavender px-2.5 py-1 text-xs font-bold">Simulasi</span>
+              <Stiker varian="review" ikon={MessageCircle}>Simulasi</Stiker>
               <button
                 type="button"
                 onClick={() => dialogRef.current?.close()}

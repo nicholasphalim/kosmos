@@ -1,6 +1,6 @@
 "use client";
 
-import { ChevronRight, CirclePlus, Clock } from "lucide-react";
+import { ChevronRight, CirclePlus, Clock } from "@/components/icons";
 import Link from "next/link";
 import { KategoriTile, PrioritasBadge } from "@/components/tiket/Badges";
 import { ButtonLink } from "@/components/ui/Button";
@@ -12,15 +12,15 @@ export default function TiketSayaPage() {
   const tiket = useTiketList();
 
   return (
-    <main className="mx-auto flex max-w-[808px] flex-col gap-6 px-6 pt-10 pb-16">
+    <main className="page-rise mx-auto flex max-w-[860px] flex-col gap-6 px-3 pt-8 pb-16 sm:px-6">
       <div className="flex flex-wrap items-center justify-between gap-4">
-        <h1 className="font-display text-[34px] font-extrabold tracking-[-0.03em]">Tiket saya</h1>
+        <h1 className="display text-[clamp(2.5rem,6vw,4rem)]">Tiket saya</h1>
         <ButtonLink href="/penghuni/lapor" icon={<CirclePlus className="size-4.5" aria-hidden />}>
           Lapor kerusakan
         </ButtonLink>
       </div>
 
-      <section className="overflow-hidden rounded-3xl border border-line bg-white">
+      <section className="overflow-hidden panel">
         {tiket.isPending && (
           <div className="flex flex-col gap-3 p-5">
             <Skeleton className="h-16" />

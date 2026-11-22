@@ -1,16 +1,10 @@
-import { ChartNoAxesColumnIncreasing, Sparkles, TriangleExclamationPoint } from "lucide-react";
+import { Sparkles, TriangleExclamationPoint } from "@/components/icons";
 import type { TiketDetail } from "@/lib/api/types";
 import { LABEL_KATEGORI, LABEL_PRIORITAS, prioritasTiket, waktuLengkap } from "@/lib/format";
 import { IKON_KATEGORI, KategoriTile } from "./Badges";
 import { LampiranThumb } from "./LampiranThumb";
 import { StatusStepper } from "./StatusStepper";
-
-const GAYA_CHIP_PRIORITAS = {
-  tinggi: "bg-danger-bg text-danger",
-  sedang: "bg-warn-bg text-warn",
-  rendah: "bg-info-bg text-info",
-  review: "bg-lilac-100 text-violet",
-} as const;
+import { Stiker } from "@/components/ui/Stiker";
 
 /** Kartu detail tiket: identitas, hasil klasifikasi AI, lampiran, dan status. */
 export function TiketDetailCard({ tiket }: { tiket: TiketDetail }) {
@@ -18,7 +12,7 @@ export function TiketDetailCard({ tiket }: { tiket: TiketDetail }) {
   const IkonKat = tiket.kategori ? IKON_KATEGORI[tiket.kategori] : null;
 
   return (
-    <section aria-labelledby="tiket-judul" className="flex flex-col gap-6 rounded-3xl border border-line bg-white p-6 sm:p-8">
+    <section aria-labelledby="tiket-judul" className="flex flex-col gap-6 panel p-6 sm:p-8">
       <div className="flex items-center gap-4.5">
         <KategoriTile kategori={tiket.kategori} size="lg" />
         <div className="flex min-w-0 flex-col gap-1">
@@ -32,22 +26,9 @@ export function TiketDetailCard({ tiket }: { tiket: TiketDetail }) {
       </div>
 
       <div className="flex flex-wrap gap-2.5">
-        {tiket.kategori && IkonKat && (
-          <span className="flex items-center gap-2 rounded-xl bg-lilac-50 px-3.5 py-2 text-sm font-semibold">
-            <IkonKat className="size-4 text-violet" aria-hidden />
-            Kategori: {LABEL_KATEGORI[tiket.kategori]}
-          </span>
-        )}
-        <span className={`flex items-center gap-2 rounded-xl px-3.5 py-2 text-sm font-bold ${GAYA_CHIP_PRIORITAS[prioritas]}`}>
-          <ChartNoAxesColumnIncreasing className="size-4" aria-hidden />
-          {prioritas === "review" ? "Menunggu penilaian" : `Prioritas ${LABEL_PRIORITAS[prioritas].toLowerCase()}`}
-        </span>
-        {tiket.ai_confidence !== null && (
-          <span className="flex items-center gap-2 rounded-xl bg-lilac-100 px-3.5 py-2 text-sm font-semibold text-violet">
-            <Sparkles className="size-4" aria-hidden />
-            Diklasifikasi AI
-          </span>
-        )}
+        {tiket.kategori && IkonKat && <Stiker varian="netral" ikon={IkonKat}>Kategori: {LABEL_KATEGORI[tiket.kategori]}</Stiker>}
+        <Stiker varian={prioritas}>{prioritas === "review" ? "Menunggu penilaian" : `Prioritas ${LABEL_PRIORITAS[prioritas].toLowerCase()}`}</Stiker>
+        {tiket.ai_confidence !== null && <Stiker varian="review" ikon={Sparkles}>Diklasifikasi AI</Stiker>}
       </div>
 
       <p className="rounded-2xl border border-line-soft px-4.5 py-3.5 text-[15px] leading-relaxed text-navy-soft">

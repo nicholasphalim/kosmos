@@ -1,7 +1,7 @@
 "use client";
 
 import { zodResolver } from "@hookform/resolvers/zod";
-import { Send, Sparkles } from "lucide-react";
+import { Send, Sparkles } from "@/components/icons";
 import { useState } from "react";
 import { useForm, useWatch } from "react-hook-form";
 import { z } from "zod";
@@ -49,7 +49,7 @@ export function KeluhanForm({
     <form
       noValidate
       onSubmit={handleSubmit((v) => onSubmit({ deskripsi: v.deskripsi, lampiran: files }))}
-      className="flex min-w-0 flex-[999_1_560px] flex-col gap-7 rounded-3xl border border-line bg-white p-6 sm:p-8"
+      className="flex min-w-0 flex-[999_1_560px] flex-col gap-7 panel p-6 sm:p-8"
     >
       <div className="flex flex-col gap-2.5">
         <label htmlFor="deskripsi" className="font-display text-[22px] font-extrabold tracking-tight">
@@ -62,7 +62,7 @@ export function KeluhanForm({
           placeholder="Contoh: lampu kamar mandi mati sejak pagi"
           aria-invalid={errors.deskripsi ? true : undefined}
           aria-describedby="deskripsi-info"
-          className="resize-y rounded-2xl border-[1.5px] border-line-strong bg-[#fbfafe] px-4.5 py-4 text-base leading-relaxed text-navy placeholder:text-subtle aria-invalid:border-danger-dot"
+          className="resize-y rounded-2xl border border-line-strong bg-white/70 px-4.5 py-4 text-base leading-relaxed text-navy transition-[border-color,box-shadow] duration-200 placeholder:text-subtle focus:border-violet-400 focus:shadow-[0_0_0_4px_#8a6ff029] focus:outline-none aria-invalid:border-danger-dot"
           {...register("deskripsi")}
         />
         <div id="deskripsi-info" className="flex flex-wrap items-center justify-between gap-3">

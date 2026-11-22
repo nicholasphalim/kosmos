@@ -1,40 +1,64 @@
 import { clsx } from "clsx";
+import { useId } from "react";
 
 type Tone = "dark" | "light";
 
-/** Logo Kosmos: rumah dengan cincin planet + bintang. Tone "light" untuk latar navy. */
-export function LogoMark({ size = 38, tone = "dark" }: { size?: number; tone?: Tone }) {
-  const stroke = tone === "dark" ? "var(--color-navy)" : "#ffffff";
+const BINTANG = [
+  { x: 456, y: 78, r: 48, redup: false },
+  { x: 526, y: 126, r: 22, redup: true },
+  { x: 104, y: 178, r: 30, redup: true },
+  { x: 52, y: 262, r: 36, redup: false },
+  { x: 74, y: 482, r: 24, redup: true },
+];
+
+const RUMAH =
+  "M170 247Q170 235 179 227L286 131Q300 119 314 131L421 227Q430 235 430 247V456Q430 470 416 470H352V392Q352 378 338 378H262Q248 378 248 392V470H184Q170 470 170 456Z";
+const CINCIN_BELAKANG = "M16 300A284 62 0 0 1 584 300A284 40 0 0 0 16 300Z";
+const CINCIN_DEPAN = "M16 300A284 78 0 0 0 584 300A284 42 0 0 1 16 300Z";
+
+function bintang(x: number, y: number, r: number) {
+  const k = r * 0.14;
+  return `M${x} ${y - r}Q${x + k} ${y - k} ${x + r} ${y}Q${x + k} ${y + k} ${x} ${y + r}Q${x - k} ${y + k} ${x - r} ${y}Q${x - k} ${y - k} ${x} ${y - r}Z`;
+}
+
+/** Logo vector Kosmos, sama dengan komponen di Figma. Tone "light" untuk latar gelap. */
+export function LogoMark({ size = 40, tone = "dark" }: { size?: number; tone?: Tone }) {
+  const idGradien = useId();
+  const gelap = tone === "light";
+  const cincin = gelap ? "#7b5cf2" : "#1c3364";
   return (
-    <svg width={size} height={size} viewBox="0 0 48 48" fill="none" aria-hidden="true">
-      <g transform="rotate(-16 24 30)">
-        <path d="M3 30a21 7 0 0 1 42 0" stroke={stroke} strokeWidth="3.5" strokeLinecap="round" />
-      </g>
-      <path
-        d="M12 41V23L24 12l12 11v18H22v-7h-5v7z"
-        fill="var(--color-lavender)"
-        stroke={stroke}
-        strokeWidth="2.6"
-        strokeLinejoin="round"
-      />
-      <g transform="rotate(-16 24 30)">
-        <path d="M3 30a21 7 0 0 0 42 0" stroke={stroke} strokeWidth="3.5" strokeLinecap="round" />
-      </g>
-      <path d="M9 4Q9 8 13 8Q9 8 9 12Q9 8 5 8Q9 8 9 4Z" fill="var(--color-lavender)" stroke={stroke} strokeWidth="1.3" strokeLinejoin="round" />
-      <path d="M40 2Q40 5 43 5Q40 5 40 8Q40 5 37 5Q40 5 40 2Z" fill="var(--color-lavender)" stroke={stroke} strokeWidth="1.2" strokeLinejoin="round" />
+    <svg width={Math.round((size * 640) / 520)} height={size} viewBox="0 0 640 520" fill="none" aria-hidden="true">
+      <defs>
+        <linearGradient id={idGradien} x1="170" y1="120" x2="430" y2="470" gradientUnits="userSpaceOnUse">
+          <stop stopColor="#f3ecff" />
+          <stop offset="1" stopColor="#b9a0f2" />
+        </linearGradient>
+      </defs>
+      {BINTANG.map((b) => (
+        <path
+          key={`${b.x}-${b.y}`}
+          d={bintang(b.x, b.y, b.r)}
+          fill={gelap ? (b.redup ? "#b9a6f5" : "#ffffff") : b.redup ? "#8a6ff0" : "#1c3364"}
+        />
+      ))}
+      <path transform="rotate(-22 300 300)" d={CINCIN_BELAKANG} fill={cincin} />
+      {gelap ? (
+        <path d={RUMAH} fill={`url(#${idGradien})`} />
+      ) : (
+        <path d={RUMAH} fill="#d8cbff" stroke="#1c3364" strokeWidth="12" strokeLinejoin="round" />
+      )}
+      <path transform="rotate(-22 300 300)" d={CINCIN_DEPAN} fill={cincin} />
     </svg>
   );
 }
 
-export function Logo({ tone = "dark", className }: { tone?: Tone; className?: string }) {
+export function Logo({ tone = "dark", size = 40, className }: { tone?: Tone; size?: number; className?: string }) {
   return (
-    <span className={clsx("flex items-center gap-2", className)}>
-      <LogoMark tone={tone} />
+    <span className={clsx("flex items-center gap-1.5", className)}>
+      <LogoMark tone={tone} size={size} />
       <span
-        className={clsx(
-          "font-display text-[26px] font-extrabold tracking-[-0.035em]",
-          tone === "dark" ? "text-navy" : "text-white",
-        )}
+        style={{ fontSize: Math.round(size * 0.62) }}
+        className={clsx("font-bold tracking-[-0.03em]", tone === "dark" ? "text-[#1c3364]" : "text-white")}
       >
         Kosmos
       </span>

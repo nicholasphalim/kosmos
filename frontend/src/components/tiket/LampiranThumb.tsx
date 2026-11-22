@@ -1,6 +1,6 @@
 "use client";
 
-import { Image as ImageIcon, Play } from "lucide-react";
+import { Image as ImageIcon, Play } from "@/components/icons";
 import { useState } from "react";
 import type { Lampiran } from "@/lib/api/types";
 

@@ -1,10 +1,11 @@
 "use client";
 
-import { Building, Clock, RefreshCw, User, Wrench, X } from "lucide-react";
+import { Building, Clock, RefreshCw, User, Wrench, X } from "@/components/icons";
 import { KategoriTile, PrioritasBadge } from "@/components/tiket/Badges";
 import { Button } from "@/components/ui/Button";
 import type { TiketRingkas } from "@/lib/api/types";
 import { prioritasTiket, waktuRelatif } from "@/lib/format";
+import { Stiker } from "@/components/ui/Stiker";
 
 type Aksi = "proses" | "batal" | "klasifikasi";
 
@@ -19,10 +20,10 @@ type Props = {
 export function TiketPemilikItem({ tiket: t, sedang, onAksi }: Props) {
   const sibuk = sedang !== null;
   return (
-    <li className="flex flex-wrap items-center gap-x-4.5 gap-y-3.5 border-t border-line-soft px-4 py-4.5 first:border-t-0">
+    <li className="flex flex-wrap items-center gap-x-4.5 gap-y-3.5 rounded-[20px] border-t border-line-soft px-4 py-4.5 transition-colors duration-200 first:border-t-0 hover:bg-lilac-50">
       <KategoriTile kategori={t.kategori} />
 
-      <span className="flex min-w-0 flex-[1_1_260px] flex-col gap-1.5">
+      <span className="flex min-w-0 flex-[1_1_220px] flex-col gap-1.5">
         <span className="flex flex-wrap items-center gap-2">
           <span className="font-bold">{t.judul}</span>
           <PrioritasBadge prioritas={prioritasTiket(t)} />
@@ -67,16 +68,10 @@ export function TiketPemilikItem({ tiket: t, sedang, onAksi }: Props) {
           </Button>
         )}
         {t.status === "diproses" && (
-          <span className="flex h-11 items-center gap-2 rounded-xl bg-lilac-100 px-3.5 text-sm font-bold text-violet">
-            <Wrench className="size-4" aria-hidden />
-            Diproses
-          </span>
+          <Stiker varian="netral" ikon={Wrench}>Diproses</Stiker>
         )}
         {t.status === "dibatalkan" && (
-          <span className="flex h-11 items-center gap-2 rounded-xl bg-neutral-bg px-3.5 text-sm font-bold text-muted">
-            <X className="size-4" aria-hidden />
-            Dibatalkan
-          </span>
+          <Stiker varian="berakhir" ikon={X}>Dibatalkan</Stiker>
         )}
         {t.status !== "dibatalkan" && t.status !== "selesai" && (
           <Button
@@ -85,7 +80,7 @@ export function TiketPemilikItem({ tiket: t, sedang, onAksi }: Props) {
             loading={sedang === "batal"}
             aria-label={`Batalkan ${t.kode}`}
             title="Batalkan"
-            className="w-11 border-line px-0 text-muted"
+            className="w-11 shrink-0 border-line px-0! text-muted hover:border-danger-dot/50 hover:bg-danger-bg hover:text-danger"
             onClick={() => onAksi("batal")}
             icon={sedang === "batal" ? undefined : <X className="size-4" strokeWidth={2.4} aria-hidden />}
           />
