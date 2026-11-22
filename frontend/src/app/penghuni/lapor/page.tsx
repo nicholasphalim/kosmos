@@ -1,11 +1,11 @@
 "use client";
 
-import { House } from "lucide-react";
+import { House } from "@/components/icons";
 import { useRouter } from "next/navigation";
-import { PlanetHouseArt } from "@/components/brand/Art";
 import { AlurSetelahKirim } from "@/components/keluhan/AlurSetelahKirim";
 import { KeluhanForm } from "@/components/keluhan/KeluhanForm";
 import { LaporanDitolak } from "@/components/keluhan/LaporanDitolak";
+import { KosmosScene } from "@/components/three/KosmosScene";
 import { SewaBadge } from "@/components/tiket/Badges";
 import { Skeleton } from "@/components/ui/States";
 import { useAjukanKeluhan, useProfilPenghuni } from "@/lib/api/hooks";
@@ -21,14 +21,14 @@ export default function LaporPage() {
   }
 
   return (
-    <main className="mx-auto flex max-w-[1160px] flex-col gap-6 px-6 pt-8 pb-16">
-      <section className="relative flex flex-col gap-4.5 overflow-hidden rounded-[28px] bg-navy p-8 text-white sm:p-10">
-        <PlanetHouseArt className="pointer-events-none absolute top-1/2 right-6 hidden w-[260px] -translate-y-1/2 md:block" />
-        <h1 className="relative max-w-[560px] font-display text-[44px] leading-none font-extrabold tracking-[-0.04em] sm:text-[52px]">
-          Ada yang rusak?
+    <main className="page-rise mx-auto flex max-w-[1240px] flex-col gap-6 px-3 pt-5 pb-16 sm:px-6">
+      <section className="night flex min-h-[340px] flex-col justify-end gap-5 rounded-[36px] p-7 sm:p-12">
+        <KosmosScene variant="tukang" className="absolute inset-y-0 right-0 hidden w-[56%] [mask-image:linear-gradient(90deg,transparent,#000_16%)] md:block" />
+        <h1 className="display relative max-w-[720px] text-[clamp(3rem,7vw,5.75rem)]">
+          Ada yang <span className="text-glow">rusak?</span>
         </h1>
-        <p className="relative max-w-[460px] text-[17px] text-hero-sub">Foto masalahnya, kami kabari pemilik lewat WhatsApp.</p>
-        <div className="relative flex flex-wrap items-center gap-2.5 self-start rounded-full bg-white/10 py-2 pr-2 pl-3.5">
+        <p className="relative max-w-[460px] text-lg text-hero-sub">Foto masalahnya, kami kabari pemilik lewat WhatsApp.</p>
+        <div className="relative flex flex-wrap items-center gap-2.5 self-start rounded-full border border-white/20 bg-white/10 py-1.5 pr-1.5 pl-3.5 backdrop-blur">
           <House className="size-4.5 text-lavender" aria-hidden />
           {profil.data ? (
             <>

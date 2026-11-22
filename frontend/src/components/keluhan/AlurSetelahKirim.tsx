@@ -1,16 +1,16 @@
 import { clsx } from "clsx";
-import { MessageCircle, ShieldCheck, Sparkles, type LucideIcon } from "lucide-react";
+import { MessageCircle, ShieldCheck, Sparkles, type IkonKosmos } from "@/components/icons";
 
-const LANGKAH: Array<{ judul: string; ket: string; icon: LucideIcon; gaya: string }> = [
-  { judul: "Sewa dicek", ket: "Hanya sewa aktif yang bisa lapor", icon: ShieldCheck, gaya: "bg-lilac-100 text-violet" },
-  { judul: "AI menilai", ket: "Kategori dan prioritas otomatis", icon: Sparkles, gaya: "bg-lavender text-navy" },
-  { judul: "Pemilik dikabari", ket: "Notifikasi WhatsApp ke kamu dan pemilik", icon: MessageCircle, gaya: "bg-navy text-white" },
+const LANGKAH: Array<{ judul: string; ket: string; icon: IkonKosmos }> = [
+  { judul: "Sewa dicek", ket: "Hanya sewa aktif yang bisa lapor", icon: ShieldCheck },
+  { judul: "AI menilai", ket: "Kategori dan prioritas otomatis", icon: Sparkles },
+  { judul: "Pemilik dikabari", ket: "Notifikasi WhatsApp ke kamu dan pemilik", icon: MessageCircle },
 ];
 
 /** Penjelasan alur layanan untuk penghuni. Saat `aktif`, langkah dianimasikan selama request berjalan. */
 export function AlurSetelahKirim({ aktif }: { aktif: boolean }) {
   return (
-    <aside aria-labelledby="alur-judul" className="flex min-w-0 flex-[1_1_300px] flex-col gap-5 rounded-3xl border border-line bg-white p-7">
+    <aside aria-labelledby="alur-judul" className="flex min-w-0 flex-[1_1_300px] flex-col gap-5 panel p-7">
       <h2 id="alur-judul" className="font-display text-xl font-extrabold tracking-tight">
         Setelah dikirim
       </h2>
@@ -20,7 +20,7 @@ export function AlurSetelahKirim({ aktif }: { aktif: boolean }) {
             <span className="flex flex-col items-center">
               <span
                 aria-hidden
-                className={clsx("flex size-12 items-center justify-center rounded-2xl", l.gaya, aktif && "animate-pulse")}
+                className={clsx("flex size-12 items-center justify-center rounded-2xl bg-navy", aktif && "animate-pulse")}
                 style={aktif ? { animationDelay: `${i * 300}ms` } : undefined}
               >
                 <l.icon className="size-5.5" />

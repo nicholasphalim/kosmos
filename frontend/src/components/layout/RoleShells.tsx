@@ -1,6 +1,6 @@
 "use client";
 
-import { CirclePlus, Ticket } from "lucide-react";
+import { CirclePlus, Ticket } from "@/components/icons";
 import type { ReactNode } from "react";
 import { OutboxButton } from "@/components/notifikasi/OutboxButton";
 import { AppHeader, type NavItem } from "./AppHeader";

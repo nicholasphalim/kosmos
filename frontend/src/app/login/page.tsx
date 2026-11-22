@@ -1,63 +1,113 @@
 "use client";
 
 import { clsx } from "clsx";
-import { Check, ChevronRight, House, Lock, RotateCcw, User, X, Building, type LucideIcon } from "lucide-react";
+import { ChevronRight, House, RotateCcw, X } from "@/components/icons";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useEffect } from "react";
-import { PlanetHouseArt } from "@/components/brand/Art";
+import { useEffect, useState, type KeyboardEvent } from "react";
+import { AstronotAvatar } from "@/components/brand/AstronotAvatar";
 import { Logo } from "@/components/brand/Logo";
+import { KosmosScene } from "@/components/three/KosmosScene";
 import { BERANDA_ROLE } from "@/components/layout/RoleGuard";
 import { ErrorState, Skeleton } from "@/components/ui/States";
 import { useAkunDemo, useDemoLogin } from "@/lib/api/hooks";
 import type { AkunDemo } from "@/lib/api/types";
 import { config } from "@/lib/config";
 import { resetDemo } from "@/lib/demoReset";
-import { inisial } from "@/lib/format";
 import { useSession } from "@/lib/session";
+import { Stiker } from "@/components/ui/Stiker";
 
-const TAG: Record<AkunDemo["label_sewa"], { teks: (a: AkunDemo) => string; icon: LucideIcon; gaya: string }> = {
-  aktif: { teks: () => "Sewa aktif", icon: Check, gaya: "bg-ok-bg text-ok" },
-  berakhir: { teks: () => "Sewa berakhir", icon: X, gaya: "bg-danger-bg text-danger" },
-  pemilik: { teks: (a) => `${a.jumlah_properti ?? 0} kos`, icon: House, gaya: "bg-lilac-100 text-violet" },
-};
+/** Avatar akun: pemilik memakai ikon orang, penghuni memakai maskot sesuai status sewa. */
+function AvatarAkun({ label }: { label: AkunDemo["label_sewa"] }) {
+  if (label === "pemilik") {
+    return <AstronotAvatar suasana="pemilik" className="size-12 shrink-0" />;
+  }
+  return (
+    <>
+      <AstronotAvatar suasana={label === "aktif" ? "senang" : "sedih"} className="size-12 shrink-0" />
+      {/* Status tetap terbaca oleh screen reader walau labelnya tidak ditampilkan. */}
+      <span className="sr-only">{label === "aktif" ? "Sewa aktif" : "Sewa berakhir"}</span>
+    </>
+  );
+}
+
+const TAB = [
+  { role: "penghuni", label: "Penghuni", kerangka: 3 },
+  { role: "pemilik", label: "Pemilik", kerangka: 1 },
+] as const;
+
+type RoleTab = (typeof TAB)[number]["role"];
 
 export default function LoginPage() {
   const session = useSession();
   const router = useRouter();
   const akun = useAkunDemo();
   const login = useDemoLogin();
+  const [tab, setTab] = useState<RoleTab>("penghuni");
 
   // Sudah masuk: langsung ke beranda role.
   useEffect(() => {
     if (session) router.replace(BERANDA_ROLE[session.pengguna.role]);
   }, [session, router]);
 
-  const grup = [
-    { judul: "Penghuni", icon: User, items: akun.data?.filter((a) => a.pengguna.role === "penghuni") ?? [] },
-    { judul: "Pemilik", icon: Building, items: akun.data?.filter((a) => a.pengguna.role === "pemilik") ?? [] },
-  ];
+  const tabAktif = TAB.find((t) => t.role === tab)!;
+  const items = akun.data?.filter((a) => a.pengguna.role === tab) ?? [];
+
+  function pindahTab(e: KeyboardEvent<HTMLButtonElement>) {
+    if (e.key !== "ArrowLeft" && e.key !== "ArrowRight") return;
+    e.preventDefault();
+    const berikut = tab === "penghuni" ? "pemilik" : "penghuni";
+    setTab(berikut);
+    document.getElementById(`tab-${berikut}`)?.focus();
+  }
 
   return (
-    <div className="flex min-h-screen flex-wrap bg-lilac-50">
-      <section
-        aria-label="Kosmos"
-        className="relative flex min-h-90 flex-[1_1_420px] flex-col gap-8 overflow-hidden bg-navy p-10 text-white sm:p-14"
-      >
-        <PlanetHouseArt className="absolute -right-10 -bottom-6 w-[min(520px,90%)]" />
-        <Logo tone="light" className="relative" />
-        <p className="relative max-w-[420px] font-display text-5xl leading-[1.02] font-extrabold tracking-[-0.04em]">
-          Kerusakan kos, cepat beres.
-        </p>
-      </section>
+    <div
+      className="login-bg flex min-h-screen items-center justify-center p-3 sm:p-6 lg:p-8"
+      style={{ backgroundImage: "url(/login-bg.webp)" }}
+    >
+      <div className="page-rise relative grid w-full max-w-[1240px] grid-cols-[minmax(0,1fr)] overflow-hidden rounded-[32px] bg-white text-navy shadow-[0_40px_120px_-40px_#7340b2] lg:min-h-[min(760px,calc(100vh-4rem))] lg:grid-cols-[minmax(0,45fr)_minmax(0,55fr)]">
+        <Link
+          href="/"
+          aria-label="Tutup dan kembali ke beranda"
+          title="Tutup"
+          className="absolute top-4 right-4 z-20 flex size-11 items-center justify-center rounded-full bg-lilac-100 text-navy transition-colors duration-200 hover:bg-violet hover:text-white sm:top-5 sm:right-5"
+        >
+          <X className="size-5" strokeWidth={2.4} aria-hidden />
+        </Link>
+        <section aria-label="Kosmos" className="night relative flex min-h-[420px] flex-col justify-start gap-4 border-0 p-6 sm:p-9">
+          <KosmosScene variant="astronot" className="absolute inset-0" />
+          <Logo tone="light" size={46} className="relative" />
+          <p className="relative mr-auto ml-[46%] w-fit max-w-[210px] rounded-[20px] rounded-bl-md border border-white/20 bg-white/12 px-4 py-2.5 text-sm font-bold text-white shadow-[0_16px_40px_-18px_#000] backdrop-blur-md max-lg:absolute max-lg:top-24 max-lg:right-4 max-lg:ml-0 max-lg:max-w-[150px] max-lg:text-[13px] lg:-mt-2">
+            Halo! Selamat datang di Kosmos.
+          </p>        </section>
 
-      <main className="flex flex-[1_1_480px] items-center justify-center px-6 py-14">
-        <div className="flex w-full max-w-[440px] flex-col gap-7">
-          <div className="flex flex-col gap-2">
-            <h1 className="font-display text-[40px] leading-[1.05] font-extrabold tracking-[-0.04em]">Masuk sebagai</h1>
-            <p className="flex items-center gap-2 text-[15px] text-muted">
-              <Lock className="size-4" aria-hidden />
-              Akun demo, tanpa kata sandi
-            </p>
+        <main className="flex flex-col justify-center gap-6 px-5 py-8 sm:px-12 sm:py-10 lg:px-16">
+          <h1 className="text-[clamp(2rem,3.5vw,2.75rem)] leading-tight font-bold tracking-[-0.025em]">Masuk sebagai</h1>
+
+          <div role="tablist" aria-label="Jenis akun" className="flex gap-8 border-b border-line-strong">
+            {TAB.map((t) => {
+              const aktif = t.role === tab;
+              return (
+                <button
+                  key={t.role}
+                  id={`tab-${t.role}`}
+                  type="button"
+                  role="tab"
+                  aria-selected={aktif}
+                  aria-controls="panel-akun"
+                  tabIndex={aktif ? 0 : -1}
+                  onClick={() => setTab(t.role)}
+                  onKeyDown={pindahTab}
+                  className={clsx(
+                    "-mb-px cursor-pointer border-b-[3px] pb-3 text-lg font-bold transition-colors duration-200",
+                    aktif ? "border-violet text-navy" : "border-transparent text-subtle hover:text-navy",
+                  )}
+                >
+                  {t.label}
+                </button>
+              );
+            })}
           </div>
 
           {akun.isError && <ErrorState pesan="Gagal memuat akun demo." onRetry={() => akun.refetch()} />}
@@ -67,73 +117,67 @@ export default function LoginPage() {
             </p>
           )}
 
-          {grup.map((g) => (
-            <section key={g.judul} className="flex flex-col gap-2.5">
-              <h2 className="flex items-center gap-2 text-sm font-bold text-muted">
-                <g.icon className="size-4" aria-hidden />
-                {g.judul}
-              </h2>
-              <ul className="overflow-hidden rounded-[20px] border border-line bg-white">
-                {akun.isPending &&
-                  Array.from({ length: g.judul === "Penghuni" ? 3 : 1 }, (_, i) => (
-                    <li key={i} className="flex items-center gap-3.5 border-t border-line-soft px-4.5 py-3.5 first:border-t-0">
-                      <Skeleton className="size-11" />
-                      <Skeleton className="h-4 flex-1" />
-                    </li>
-                  ))}
-                {g.items.map((a) => {
-                  const tag = TAG[a.label_sewa];
-                  const sedangMasuk = login.isPending && login.variables === a.pengguna.id;
-                  return (
-                    <li key={a.pengguna.id} className="border-t border-line-soft first:border-t-0">
-                      <button
-                        type="button"
-                        disabled={login.isPending}
-                        onClick={() => login.mutate(a.pengguna.id)}
-                        className="flex min-h-18 w-full cursor-pointer items-center gap-3.5 px-4.5 py-3.5 text-left hover:bg-lilac-50 disabled:cursor-wait"
-                      >
-                        <span
-                          aria-hidden
-                          className={clsx(
-                            "flex size-11 shrink-0 items-center justify-center rounded-[14px] font-display text-lg font-extrabold",
-                            a.pengguna.role === "pemilik" ? "bg-navy text-lavender" : "bg-lavender text-navy",
-                          )}
-                        >
-                          {inisial(a.pengguna.nama)}
-                        </span>
-                        <span className="flex min-w-0 flex-1 flex-col gap-0.5">
-                          <span className="font-bold">{a.pengguna.nama}</span>
-                          <span className="truncate text-sm text-muted">{a.keterangan}</span>
-                        </span>
-                        <span className={clsx("flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-bold whitespace-nowrap", tag.gaya)}>
-                          <tag.icon className="size-3" strokeWidth={3} aria-hidden />
-                          {tag.teks(a)}
-                        </span>
-                        <ChevronRight className={clsx("size-4.5 text-subtle", sedangMasuk && "animate-pulse")} aria-hidden />
-                      </button>
-                    </li>
-                  );
-                })}
-              </ul>
-            </section>
-          ))}
+          <div id="panel-akun" role="tabpanel" aria-labelledby={`tab-${tab}`} className={clsx("min-h-[284px] flex-col gap-2.5", akun.isError ? "hidden" : "flex")}>
+            <p className="text-sm font-medium">Pilih akun</p>
+            <ul className="flex flex-col gap-2.5">
+              {akun.isPending &&
+                Array.from({ length: tabAktif.kerangka }, (_, i) => (
+                  <li key={i} className="flex min-h-[74px] items-center gap-3.5 rounded-2xl border border-line-strong px-4">
+                    <Skeleton className="size-11" />
+                    <Skeleton className="h-4 flex-1" />
+                  </li>
+                ))}
+              {items.map((a) => {
+                const sedangMasuk = login.isPending && login.variables === a.pengguna.id;
+                return (
+                  <li key={a.pengguna.id}>
+                    <button
+                      type="button"
+                      disabled={login.isPending}
+                      onClick={() => login.mutate(a.pengguna.id)}
+                      className="group flex min-h-[74px] w-full cursor-pointer items-center gap-3.5 rounded-2xl border border-line-strong bg-white px-3.5 py-3 text-left transition-colors duration-200 hover:border-violet-400 hover:bg-lilac-50 disabled:cursor-wait"
+                    >
+                      <AvatarAkun label={a.label_sewa} />
+                      <span className="flex min-w-0 flex-1 flex-col">
+                        <span className="font-semibold">{a.pengguna.nama}</span>
+                        <span className="truncate text-sm text-muted">{a.keterangan}</span>
+                      </span>
+                      {a.label_sewa === "pemilik" && (
+                        <Stiker varian="netral" ikon={House}>{a.jumlah_properti ?? 0} kos</Stiker>
+                      )}
+                      <ChevronRight
+                        className={clsx(
+                          "size-4.5 shrink-0 text-subtle transition-transform duration-200 group-hover:translate-x-0.5 group-hover:text-violet",
+                          sedangMasuk && "animate-pulse",
+                        )}
+                        aria-hidden
+                      />
+                    </button>
+                  </li>
+                );
+              })}
+            </ul>
+          </div>
 
           {config.apiMode === "mock" && (
-            <button
-              type="button"
-              onClick={() => {
-                if (window.confirm("Kembalikan semua data demo ke kondisi awal? Tiket dan pesan yang dibuat akan hilang.")) {
-                  resetDemo();
-                }
-              }}
-              className="flex h-11 cursor-pointer items-center justify-center gap-2 self-center rounded-xl px-3.5 text-sm font-semibold text-muted hover:bg-lilac-100 hover:text-navy"
-            >
-              <RotateCcw className="size-4" aria-hidden />
-              Reset data demo
-            </button>
+            <p className="flex flex-wrap items-center justify-center gap-1 text-sm text-muted">
+              Data demo berantakan?
+              <button
+                type="button"
+                onClick={() => {
+                  if (window.confirm("Kembalikan semua data demo ke kondisi awal? Tiket dan pesan yang dibuat akan hilang.")) {
+                    resetDemo();
+                  }
+                }}
+                className="flex min-h-11 cursor-pointer items-center gap-1.5 rounded-lg px-1.5 font-semibold text-navy hover:text-violet"
+              >
+                <RotateCcw className="size-3.5" aria-hidden />
+                Reset data demo
+              </button>
+            </p>
           )}
-        </div>
-      </main>
+        </main>
+      </div>
     </div>
   );
 }

@@ -1,5 +1,5 @@
 import { clsx } from "clsx";
-import { Check, X } from "lucide-react";
+import { Check, X } from "@/components/icons";
 import type { Layer, TraceStep } from "@/lib/api/types";
 import { formatDurasi } from "@/lib/format";
 
@@ -16,7 +16,7 @@ const GAYA_LAYER: Record<Layer, string> = {
 export function ServiceTrace({ steps }: { steps: TraceStep[] }) {
   const total = steps.reduce((sum, s) => sum + s.ms, 0);
   return (
-    <details className="rounded-2xl border border-line bg-white p-5 open:pb-3">
+    <details className="panel p-5 open:pb-3">
       <summary className="flex cursor-pointer flex-wrap items-baseline justify-between gap-2 font-bold">
         Jejak layanan (SOA)
         <span className="font-mono text-xs font-medium text-muted">

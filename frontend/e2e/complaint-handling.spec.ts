@@ -6,6 +6,7 @@ import { expect, test, type Page } from "@playwright/test";
 
 async function masukSebagai(page: Page, nama: string) {
   await page.goto("/login");
+  if (nama.startsWith("Pak ")) await page.getByRole("tab", { name: "Pemilik" }).click();
   await page.getByRole("button", { name: new RegExp(nama) }).click();
 }
 

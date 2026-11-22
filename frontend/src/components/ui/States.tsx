@@ -1,5 +1,5 @@
 import { clsx } from "clsx";
-import { LoaderCircle, Sparkles, TriangleExclamationPoint } from "lucide-react";
+import { LoaderCircle, Sparkles, TriangleExclamationPoint } from "@/components/icons";
 import type { ReactNode } from "react";
 import { Button } from "./Button";
 
@@ -14,7 +14,7 @@ export function Spinner({ label = "Memuat…", className }: { label?: string; cl
 
 /** Kerangka abu-abu saat data dimuat. */
 export function Skeleton({ className }: { className?: string }) {
-  return <span aria-hidden className={clsx("block animate-pulse rounded-xl bg-line", className)} />;
+  return <span aria-hidden className={clsx("shimmer block rounded-xl bg-line", className)} />;
 }
 
 export function ErrorState({ pesan, onRetry }: { pesan: string; onRetry?: () => void }) {

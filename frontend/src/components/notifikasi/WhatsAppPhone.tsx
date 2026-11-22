@@ -1,11 +1,11 @@
 import { clsx } from "clsx";
-import { CheckCheck, FilePlus, Sparkles, Wrench, X, Zap, type LucideIcon } from "lucide-react";
+import { CheckCheck, FilePlus, Sparkles, Wrench, X, Zap, type IkonKosmos } from "@/components/icons";
 import { useEffect, useRef } from "react";
 import { LogoMark } from "@/components/brand/Logo";
 import type { Notifikasi } from "@/lib/api/types";
 import { jamSaja } from "@/lib/format";
 
-const JENIS: Record<Notifikasi["jenis"], { label: string; icon: LucideIcon; warna: string }> = {
+const JENIS: Record<Notifikasi["jenis"], { label: string; icon: IkonKosmos; warna: string }> = {
   tiket_dibuat: { label: "Tiket baru", icon: FilePlus, warna: "text-wa" },
   diklasifikasi: { label: "Diklasifikasi", icon: Sparkles, warna: "text-violet" },
   prioritas_tinggi: { label: "Prioritas TINGGI", icon: Zap, warna: "text-danger" },

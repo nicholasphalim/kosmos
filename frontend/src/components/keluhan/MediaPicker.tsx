@@ -1,6 +1,6 @@
 "use client";
 
-import { Camera, Info, Play, X } from "lucide-react";
+import { Camera, Info, Play, X } from "@/components/icons";
 import { useEffect, useId, useMemo } from "react";
 import { ukuranFile } from "@/lib/format";
 
@@ -99,7 +99,7 @@ export function MediaPicker({ files, onChange, onError, disabled }: Props) {
         {files.length < BATAS_LAMPIRAN.maksFile && (
           <label
             htmlFor={inputId}
-            className="relative flex aspect-square cursor-pointer flex-col items-center justify-center gap-2 rounded-[18px] border-2 border-dashed border-violet-300 bg-[#fbfafe] text-sm font-bold text-violet focus-within:outline-3 focus-within:outline-violet-400 hover:bg-lilac-100"
+            className="relative flex aspect-square cursor-pointer flex-col first:col-span-3 first:aspect-auto first:h-36 items-center justify-center gap-2 rounded-[18px] border-2 border-dashed border-violet-300 bg-white/60 text-sm font-bold text-violet transition-colors duration-200 focus-within:outline-3 focus-within:outline-violet-400 hover:bg-lilac-100"
           >
             <Camera className="size-7.5" strokeWidth={1.8} aria-hidden />
             Tambah
