@@ -66,7 +66,7 @@ export function TiketPemilikItem({ tiket: t, statusWo, sedang, onAksi }: Props) 
         )}
         {t.status === "diklasifikasi" && (
           <ButtonLink href={href} icon={<HardHat className="size-4.5" aria-hidden />}>
-            Cari teknisi
+            Tinjau estimasi
           </ButtonLink>
         )}
         {t.status === "diproses" && (

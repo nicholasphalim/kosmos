@@ -493,6 +493,67 @@ function kabariPerubahan(t: TiketRow, jenis: JenisTiket) {
   );
 }
 
+/**
+ * Mencari teknisi dan menyiapkan estimasi biaya (BPMN Repair Verification langkah 1-3).
+ * Dipanggil otomatis oleh HMR setelah tiket diklasifikasi. Get Estimasi Biaya non-agnostic (D1),
+ * jadi catatan estimasi dimiliki Task HMR. Mengembalikan null bila belum ada teknisi yang cocok.
+ */
+async function cariTeknisiDanEstimasi(t: TiketRow, tr: Tracer): Promise<EstimasiRow | null> {
+  if (t.status !== "diklasifikasi" || !t.kategori || !t.urgensi) {
+    throw new ServiceError(409, "TIKET_BELUM_SIAP", "Teknisi dicarikan untuk tiket yang sudah diklasifikasi dan belum diproses.");
+  }
+  const idTiket = t.id;
+  const kategori = t.kategori;
+  const urgensi = t.urgensi;
+  const k = complaintTicket.getKeluhanRow(t.id_keluhan);
+  const unit = tenantLease.unitRingkas(k.id_unit);
+  const lokasi = tenantLease.lokasiProperti(k.id_unit);
+
+  const calonRows = await tr.run("Technician", "Entity", (r: TeknisiRow[]) => `getTeknisiTersedia(${LABEL_KATEGORI[kategori]}) → ${r.length} teknisi`, jitter(4, 8), () =>
+    technician.getTeknisi(),
+  );
+  await tr.run("Technician", "Entity", (n: number) => `getStatusVerifikasiTeknisi → ${n} terverifikasi`, jitter(3, 6), () =>
+    calonRows.filter((r) => technician.getStatusVerifikasi(r.id_pengguna)).length,
+  );
+  const beban = await tr.run("Work Order", "Entity", "hitungBebanAktif(teknisi[])", jitter(3, 6), () =>
+    new Map(calonRows.map((r) => [r.id_pengguna, workOrder.jumlahAktif(r.id_pengguna)])),
+  );
+  const kandidat = await tr.run(
+    "Technician Matching", "Micro",
+    (h: ReturnType<typeof matchTeknisi>) => `matchTeknisi(${LABEL_KATEGORI[kategori]}, ${urgensi}) → ${h.find((x) => x.lolos)?.teknisi.nama ?? "tidak ada"}`,
+    jitter(180, 320),
+    () =>
+      matchTeknisi(kategori, urgensi, calonRows.map((r) => ({
+        teknisi: technician.ringkas(r.id_pengguna),
+        tersedia: r.tersedia,
+        jarak_km: jarakKm(lokasi, r),
+        beban: beban.get(r.id_pengguna) ?? 0,
+      }))),
+  );
+  const terpilih = kandidat.find((x) => x.lolos);
+  if (!terpilih) return null;
+  const est = await tr.run("Cost Estimation", "Micro", (e: { total: number }) => `estimateBiaya → ${rupiah(e.total)}`, jitter(120, 240), () =>
+    estimasiBiaya({ kategori, urgensi, deskripsi: k.deskripsi, jarak_km: terpilih.jarak_km }),
+  );
+
+  const row = await tr.run("Handle Maintenance Request", "Task", "simpan estimasi → menunggu persetujuan", jitter(3, 6), () => {
+    // Estimasi lama yang belum diputuskan diganti yang baru.
+    for (const e of db().estimasi) if (e.id_tiket === idTiket && e.status === "menunggu") e.status = "ditolak";
+    const baru: EstimasiRow = {
+      id: db().seq.estimasi++, id_tiket: idTiket, id_teknisi: terpilih.teknisi.id, kandidat, rincian: est.rincian,
+      total: est.total, status: "menunggu", diputuskan_oleh: null, diputuskan_at: null, created_at: nowIso(),
+    };
+    db().estimasi.push(baru);
+    return baru;
+  });
+  await tr.run("Notification", "Utility", (n: number) => `setNotifikasi(estimasi) × ${n} (WA mock)`, jitter(6, 10), () =>
+    notification.kirim([tenantLease.pengguna(unit.id_pemilik)], kodeTiket(t.id), "estimasi", () =>
+      `Estimasi ${unit.nomor_unit}: ${rupiah(est.total)}, teknisi ${terpilih.teknisi.nama}. Buka Kosmos untuk menyetujui.`,
+    ),
+  );
+  return row;
+}
+
 export const hmr = {
   /** Operasi Add Keluhan: orkestrasi lengkap Complaint Handling (plan §3). */
   async ajukanKeluhan(user: PenggunaRow, deskripsi: string, files: File[]): Promise<{ status: 200 | 201; body: KeluhanResponse }> {
@@ -561,6 +622,8 @@ export const hmr = {
       await tr.run("Notification", "Utility", (n: number) => `setNotifikasi(${hasil.urgensi === "tinggi" ? "prioritas_tinggi" : "diklasifikasi"}) × ${n} (WA mock)`, jitter(6, 10), () =>
         kabariPerubahan(tiket, hasil.urgensi === "tinggi" ? "prioritas_tinggi" : "diklasifikasi"),
       );
+      // BPMN Repair Verification dimulai otomatis setelah tiket diklasifikasi.
+      await cariTeknisiDanEstimasi(complaintTicket.getTiketRow(tiket.id), tr);
     } catch (e) {
       if (!(e instanceof ServiceError) || e.status !== 503) throw e;
       warning = "Klasifikasi AI gagal. Tiket tetap dibuat dan menunggu klasifikasi ulang oleh pemilik.";
@@ -619,6 +682,7 @@ export const hmr = {
     complaintTicket.setKategoriUrgensi(idTiket, hasil);
     complaintTicket.setStatusTiket(idTiket, "diklasifikasi", "AI Classification");
     kabariPerubahan(t, hasil.urgensi === "tinggi" ? "prioritas_tinggi" : "diklasifikasi");
+    await cariTeknisiDanEstimasi(t, new Tracer());
     commit();
     return complaintTicket.toDetail(t);
   },
@@ -627,8 +691,8 @@ export const hmr = {
   /* ----------------------------------------------------------------- */
 
   /**
-   * Mencari teknisi dan menyajikan estimasi biaya (BPMN Repair Verification langkah 1-3).
-   * Get Estimasi Biaya non-agnostic (D1), jadi catatan estimasi dimiliki Task HMR.
+   * Cari ulang teknisi + estimasi secara manual. Normalnya estimasi sudah dibuat otomatis
+   * setelah klasifikasi; endpoint ini dipakai bila saat itu belum ada teknisi yang cocok.
    */
   async buatEstimasi(user: PenggunaRow, idTiket: number): Promise<EstimasiResponse> {
     auth.requireRole(user, "pemilik");
@@ -639,59 +703,10 @@ export const hmr = {
       if (!complaintTicket.bolehLihat(user, row)) throw new ServiceError(404, "TIKET_TIDAK_ADA", "Tiket tidak ditemukan.");
       return row;
     });
-    if (t.status !== "diklasifikasi" || !t.kategori || !t.urgensi) {
-      throw new ServiceError(409, "TIKET_BELUM_SIAP", "Teknisi dicarikan untuk tiket yang sudah diklasifikasi dan belum diproses.");
-    }
-    const kategori = t.kategori;
-    const urgensi = t.urgensi;
-    const k = complaintTicket.getKeluhanRow(t.id_keluhan);
-    const unit = tenantLease.unitRingkas(k.id_unit);
-    const lokasi = tenantLease.lokasiProperti(k.id_unit);
-
-    const calonRows = await tr.run("Technician", "Entity", (r: TeknisiRow[]) => `getTeknisiTersedia(${LABEL_KATEGORI[kategori]}) → ${r.length} teknisi`, jitter(4, 8), () =>
-      technician.getTeknisi(),
-    );
-    await tr.run("Technician", "Entity", (n: number) => `getStatusVerifikasiTeknisi → ${n} terverifikasi`, jitter(3, 6), () =>
-      calonRows.filter((r) => technician.getStatusVerifikasi(r.id_pengguna)).length,
-    );
-    const beban = await tr.run("Work Order", "Entity", "hitungBebanAktif(teknisi[])", jitter(3, 6), () =>
-      new Map(calonRows.map((r) => [r.id_pengguna, workOrder.jumlahAktif(r.id_pengguna)])),
-    );
-    const kandidat = await tr.run(
-      "Technician Matching", "Micro",
-      (h: ReturnType<typeof matchTeknisi>) => `matchTeknisi(${LABEL_KATEGORI[kategori]}, ${urgensi}) → ${h.find((x) => x.lolos)?.teknisi.nama ?? "tidak ada"}`,
-      jitter(180, 320),
-      () =>
-        matchTeknisi(kategori, urgensi, calonRows.map((r) => ({
-          teknisi: technician.ringkas(r.id_pengguna),
-          tersedia: r.tersedia,
-          jarak_km: jarakKm(lokasi, r),
-          beban: beban.get(r.id_pengguna) ?? 0,
-        }))),
-    );
-    const terpilih = kandidat.find((x) => x.lolos);
-    if (!terpilih) {
+    const row = await cariTeknisiDanEstimasi(t, tr);
+    if (!row) {
       throw new ServiceError(422, "TEKNISI_TIDAK_ADA", "Belum ada teknisi terverifikasi yang tersedia untuk kategori ini.");
     }
-    const est = await tr.run("Cost Estimation", "Micro", (e: { total: number }) => `estimateBiaya → ${rupiah(e.total)}`, jitter(120, 240), () =>
-      estimasiBiaya({ kategori, urgensi, deskripsi: k.deskripsi, jarak_km: terpilih.jarak_km }),
-    );
-
-    const row = await tr.run("Handle Maintenance Request", "Task", "simpan estimasi → menunggu persetujuan", jitter(3, 6), () => {
-      // Estimasi lama yang belum diputuskan diganti yang baru.
-      for (const e of db().estimasi) if (e.id_tiket === idTiket && e.status === "menunggu") e.status = "ditolak";
-      const baru: EstimasiRow = {
-        id: db().seq.estimasi++, id_tiket: idTiket, id_teknisi: terpilih.teknisi.id, kandidat, rincian: est.rincian,
-        total: est.total, status: "menunggu", diputuskan_oleh: null, diputuskan_at: null, created_at: nowIso(),
-      };
-      db().estimasi.push(baru);
-      return baru;
-    });
-    await tr.run("Notification", "Utility", (n: number) => `setNotifikasi(estimasi) × ${n} (WA mock)`, jitter(6, 10), () =>
-      notification.kirim([tenantLease.pengguna(unit.id_pemilik)], kodeTiket(t.id), "estimasi", () =>
-        `Estimasi ${unit.nomor_unit}: ${rupiah(est.total)}, teknisi ${terpilih.teknisi.nama}. Buka Kosmos untuk menyetujui.`,
-      ),
-    );
     commit();
     return { estimasi: viewEstimasi(row), trace: tr.steps };
   },
@@ -702,7 +717,6 @@ export const hmr = {
     const row = db().estimasi.filter((e) => e.id_tiket === idTiket).sort((a, b) => b.id - a.id)[0];
     return row ? viewEstimasi(row) : null;
   },
-
   /** Set Persetujuan Biaya (non-agnostic). Disetujui -> Add Work Order + tiket diproses. Ditolak -> perbaikan dibatalkan. */
   async setPersetujuan(user: PenggunaRow, idEstimasi: number, disetujui: boolean): Promise<PersetujuanResponse> {
     auth.requireRole(user, "pemilik");

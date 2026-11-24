@@ -38,7 +38,7 @@ src/
 │  ├─ penghuni/tiket/        Tiket saya, detail tiket (+ jadwal, progres, konfirmasi selesai)
 │  ├─ penghuni/tagihan/      Daftar invoice, bayar via payment gateway (mock)
 │  ├─ pemilik/               Dashboard tiket + WhatsApp Outbox
-│  ├─ pemilik/tiket/[id]     Cari teknisi, estimasi biaya, setujui/tolak, pantau work order
+│  ├─ pemilik/tiket/[id]     Estimasi biaya otomatis, setujui/tolak, pantau work order
 │  ├─ pemilik/keuangan/      Laporan kas + daftar invoice
 │  └─ teknisi/               Daftar work order, catat log servis, unggah bukti
 ├─ components/               UI per domain: keluhan, tiket, pemilik, notifikasi, layout, ui
@@ -68,7 +68,7 @@ src/
 |---|---|
 | Dea (sewa aktif) | Lapor → tiket dibuat → diklasifikasi AI → WhatsApp ke Dea dan Pak Derren |
 | Qiqa (sewa berakhir) | Lapor → ditolak, tidak ada tiket |
-| Pak Derren (pemilik) | Filter prioritas tinggi, klasifikasi ulang, batalkan. Buka TKT-0057 → Cari teknisi → setujui estimasi. Menu Keuangan: laporan kas |
+| Pak Derren (pemilik) | Filter prioritas tinggi, klasifikasi ulang, batalkan. Buka TKT-0057 → Tinjau estimasi → setujui. Menu Keuangan: laporan kas |
 | Fredo (penghuni) | Pilih jadwal kunjungan TKT-0057, konfirmasi selesai TKT-0051 setelah bukti diunggah, lalu bayar |
 | Pak Slamet (teknisi) | WO-0012 (sedang dikerjakan): unggah foto sebelum/sesudah. Pekerjaan TKT-0057 muncul setelah estimasi disetujui |
 | Dea (penghuni) | Menu Tagihan: INV-0003 belum dibayar. Centang "simulasikan pembayaran gagal" untuk demo gagal lalu bayar ulang |

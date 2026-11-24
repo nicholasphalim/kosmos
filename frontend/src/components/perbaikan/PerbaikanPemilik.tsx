@@ -126,7 +126,8 @@ function ProgresWorkOrder({ wo }: { wo: WorkOrder }) {
 
 /**
  * Sisi pemilik proses Repair Verification:
- * cari teknisi + estimasi (HMR) -> setujui/tolak -> pantau work order sampai invoice.
+ * estimasi dibuat otomatis oleh HMR setelah klasifikasi -> setujui/tolak -> pantau work order sampai invoice.
+ * Tombol "Cari ulang teknisi" hanya muncul bila saat itu belum ada teknisi yang cocok.
  */
 export function PerbaikanPemilik({ tiket }: { tiket: TiketDetail }) {
   const estimasi = useEstimasiTiket(tiket.id);
@@ -163,10 +164,10 @@ export function PerbaikanPemilik({ tiket }: { tiket: TiketDetail }) {
     ) : (
       <div className="flex flex-col items-start gap-4">
         <p className="text-[15px] leading-relaxed text-navy-soft">
-          Kosmos mencarikan teknisi <b>terverifikasi</b> yang tersedia dan paling dekat dengan unit {tiket.unit.nomor_unit}, lalu menghitung estimasi biaya untuk kamu setujui.
+          Saat tiket diklasifikasi, belum ada teknisi <b>terverifikasi</b> yang tersedia untuk unit {tiket.unit.nomor_unit}. Kosmos bisa mencari lagi dan menghitung estimasi biaya untuk kamu setujui.
         </p>
         <Button size="lg" icon={<Search className="size-4.5" aria-hidden />} onClick={() => cari.mutate(tiket.id)}>
-          Cari teknisi & hitung estimasi
+          Cari ulang teknisi
         </Button>
       </div>
     );

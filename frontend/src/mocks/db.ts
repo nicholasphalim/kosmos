@@ -3,7 +3,7 @@
  * di docs/IMPLEMENTATION_PLAN.md §4, supaya perilaku mock = perilaku backend nanti.
  * Disimpan di localStorage agar data demo bertahan saat halaman di-reload.
  */
-import { estimasiBiaya, hitungKomisi, jarakKm, verifikasiBukti } from "./micro";
+import { estimasiBiaya, hitungKomisi, jarakKm, matchTeknisi, verifikasiBukti } from "./micro";
 import type { Kategori, LogServis, MetodePembayaran, RincianBiaya, Role, StatusTiket, StatusWorkOrder, Urgensi, KandidatTeknisi } from "@/lib/api/types";
 
 export type PenggunaRow = { id: number; nama: string; role: Role; no_wa: string };
@@ -153,7 +153,7 @@ export type TransaksiKasRow = {
 };
 
 export type MockDb = {
-  version: 2;
+  version: 3;
   seq: {
     keluhan: number; tiket: number; lampiran: number; notifikasi: number;
     estimasi: number; work_order: number; invoice: number; pembayaran: number; kas: number;
@@ -193,7 +193,7 @@ function tanggalGeser(hari: number, dari = new Date()) {
 function seed(): MockDb {
   const now = new Date();
   const db: MockDb = {
-    version: 2,
+    version: 3,
     seq: { keluhan: 102, tiket: 58, lampiran: 1, notifikasi: 1, estimasi: 1, work_order: 9, invoice: 1, pembayaran: 1, kas: 1 },
     pengguna: [
       { id: 1, nama: "Dea", role: "penghuni", no_wa: "0812-xxxx-0101" },
@@ -432,6 +432,30 @@ function seed(): MockDb {
     kas("komisi", `Komisi Kosmos ${persen}%`, -komisi);
   }
 
+  // Tiket yang sudah diklasifikasi otomatis dicarikan teknisi dan estimasinya menunggu persetujuan pemilik.
+  const bebanAktif = (idTeknisi: number) =>
+    db.work_order.filter((w) => w.id_teknisi === idTeknisi && w.status !== "selesai" && w.status !== "dibatalkan").length;
+  for (const a of awal) {
+    if (a.status !== "diklasifikasi" || !a.kategori || !a.urgensi) continue;
+    const { p } = unitInfo(a.unit);
+    const kandidat = matchTeknisi(a.kategori, a.urgensi, db.teknisi.map((tk) => {
+      const pg = db.pengguna.find((x) => x.id === tk.id_pengguna)!;
+      return {
+        teknisi: { id: pg.id, nama: pg.nama, keahlian: tk.keahlian, terverifikasi: tk.terverifikasi, rating: tk.rating, no_wa: pg.no_wa },
+        tersedia: tk.tersedia,
+        jarak_km: jarakKm(p, tk),
+        beban: bebanAktif(tk.id_pengguna),
+      };
+    }));
+    const terpilih = kandidat.find((k) => k.lolos);
+    if (!terpilih) continue;
+    const est = estimasiBiaya({ kategori: a.kategori, urgensi: a.urgensi, deskripsi: a.deskripsi, jarak_km: terpilih.jarak_km });
+    db.estimasi.push({
+      id: db.seq.estimasi++, id_tiket: a.idTiket, id_teknisi: terpilih.teknisi.id, kandidat, rincian: est.rincian, total: est.total,
+      status: "menunggu", diputuskan_oleh: null, diputuskan_at: null, created_at: menitLalu(a.menit, now),
+    });
+  }
+
   const notif = (id_penerima: number, kode: string, jenis: NotifikasiRow["jenis"], isi: string, menit: number) => {
     const p = db.pengguna.find((x) => x.id === id_penerima)!;
     db.notifikasi.push({
@@ -460,7 +484,7 @@ export function db(): MockDb {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (raw) {
       const parsed = JSON.parse(raw) as MockDb;
-      if (parsed.version === 2) return (instance = parsed);
+      if (parsed.version === 3) return (instance = parsed);
     }
   } catch {
     /* data rusak: seed ulang */

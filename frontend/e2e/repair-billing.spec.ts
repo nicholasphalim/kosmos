@@ -23,12 +23,11 @@ async function keluar(page: Page) {
 const foto = (name: string, isi: number) => ({ name, mimeType: "image/png", buffer: Buffer.alloc(4096, isi) });
 
 test("Skenario 5: estimasi disetujui, teknisi memperbaiki, penghuni konfirmasi lalu membayar", async ({ page }) => {
-  // Pemilik: cari teknisi -> estimasi -> setujui.
+  // Pemilik: estimasi sudah dibuat otomatis setelah klasifikasi -> setujui.
   await masukSebagai(page, "Pak Derren");
   const baris = page.getByRole("main").getByRole("listitem").filter({ hasText: "TKT-0057" });
-  await baris.getByRole("link", { name: "Cari teknisi" }).click();
+  await baris.getByRole("link", { name: "Tinjau estimasi" }).click();
   await expect(page).toHaveURL(/\/pemilik\/tiket\/57/);
-  await page.getByRole("button", { name: "Cari teknisi & hitung estimasi" }).click();
   await expect(page.getByText("Teknisi terpilih")).toBeVisible({ timeout: 10_000 });
   await expect(page.getByText("Pak Slamet").first()).toBeVisible();
   await page.getByText(/Hasil pencocokan teknisi/).click();

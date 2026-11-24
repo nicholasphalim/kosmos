@@ -125,6 +125,8 @@ function useTiketMutation<TVars>(call: (vars: TVars) => Promise<TiketDetail>) {
     mutationFn: call,
     onSuccess: (tiket) => {
       queryClient.setQueryData(qk.tiket(tiket.id), tiket);
+      // Klasifikasi memicu estimasi otomatis; pembatalan menolak estimasi yang menunggu.
+      void queryClient.invalidateQueries({ queryKey: qk.estimasi(tiket.id) });
       void queryClient.invalidateQueries({ queryKey: qk.tiketList, exact: true });
       void queryClient.invalidateQueries({ queryKey: qk.notifikasi });
     },

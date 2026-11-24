@@ -63,7 +63,7 @@ test("Skenario 3: Pak Derren memfilter prioritas tinggi lalu membatalkan tiket",
   await page.getByRole("button", { name: /1 prioritas tinggi/ }).click();
   const daftar = page.getByRole("main");
   const baris = daftar.getByRole("listitem").filter({ hasText: "Stop kontak memercikkan api" });
-  await expect(baris.getByRole("link", { name: "Cari teknisi" })).toBeVisible();
+  await expect(baris.getByRole("link", { name: "Tinjau estimasi" })).toBeVisible();
   page.once("dialog", (d) => d.accept());
   await baris.getByRole("button", { name: "Batalkan TKT-0057" }).click();
 
@@ -80,7 +80,7 @@ test("Skenario 4: tiket tanpa klasifikasi bisa diklasifikasi ulang oleh pemilik"
   const baris = page.getByRole("main").getByRole("listitem").filter({ hasText: "TKT-0056" });
   await expect(baris.getByText("Perlu review")).toBeVisible();
   await baris.getByRole("button", { name: "Klasifikasi ulang" }).click();
-  await expect(baris.getByRole("link", { name: "Cari teknisi" })).toBeVisible({ timeout: 10_000 });
+  await expect(baris.getByRole("link", { name: "Tinjau estimasi" })).toBeVisible({ timeout: 10_000 });
   await expect(baris.getByText("Perlu review")).toBeHidden();
 });
 
@@ -104,7 +104,7 @@ test("Reset data demo lewat tombol di halaman login", async ({ page }) => {
 
   await masukSebagai(page, "Pak Derren");
   await expect(
-    page.getByRole("main").getByRole("listitem").filter({ hasText: "TKT-0057" }).getByRole("link", { name: "Cari teknisi" }),
+    page.getByRole("main").getByRole("listitem").filter({ hasText: "TKT-0057" }).getByRole("link", { name: "Tinjau estimasi" }),
   ).toBeVisible();
 });
 
