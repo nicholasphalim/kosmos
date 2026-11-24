@@ -1,8 +1,11 @@
 /**
- * Reset data demo (mode mock): menghapus database mock, sesi login, dan status outbox
- * dari localStorage. Dipakai oleh tombol di halaman login, sinyal `npm run demo:reset`,
- * dan fungsi console kosmosResetDemo().
+ * Reset data demo: menghapus sesi login dan status outbox dari localStorage.
+ * Mode mock: database mock (juga di localStorage) ikut terhapus.
+ * Mode live: database backend dikembalikan lewat POST /dev/reset.
+ * Dipakai oleh tombol di halaman login, sinyal `npm run demo:reset`, dan fungsi console kosmosResetDemo().
  */
+import { config } from "@/lib/config";
+
 const KEY_TOKEN = "kosmos.demo-reset-token";
 
 function kunciDemo(): string[] {
@@ -26,7 +29,14 @@ export function hapusDataDemo(): boolean {
 }
 
 /** Hapus data demo lalu kembali ke halaman login dengan data seed baru. */
-export function resetDemo() {
+export async function resetDemo() {
+  if (config.apiMode === "live") {
+    try {
+      await fetch(`${config.apiBaseUrl}/dev/reset`, { method: "POST" });
+    } catch {
+      /* backend mati: sesi lokal tetap dihapus */
+    }
+  }
   hapusDataDemo();
   location.replace("/login");
 }

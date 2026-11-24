@@ -12,7 +12,6 @@ import { BERANDA_ROLE } from "@/components/layout/RoleGuard";
 import { ErrorState, Skeleton } from "@/components/ui/States";
 import { useAkunDemo, useDemoLogin } from "@/lib/api/hooks";
 import type { AkunDemo } from "@/lib/api/types";
-import { config } from "@/lib/config";
 import { resetDemo } from "@/lib/demoReset";
 import { useSession } from "@/lib/session";
 import { Stiker } from "@/components/ui/Stiker";
@@ -162,23 +161,22 @@ export default function LoginPage() {
             </ul>
           </div>
 
-          {config.apiMode === "mock" && (
-            <p className="flex flex-wrap items-center justify-center gap-1 text-sm text-muted">
-              Data demo berantakan?
-              <button
-                type="button"
-                onClick={() => {
-                  if (window.confirm("Kembalikan semua data demo ke kondisi awal? Tiket dan pesan yang dibuat akan hilang.")) {
-                    resetDemo();
-                  }
-                }}
-                className="flex min-h-11 cursor-pointer items-center gap-1.5 rounded-lg px-1.5 font-semibold text-navy hover:text-violet"
-              >
-                <RotateCcw className="size-3.5" aria-hidden />
-                Reset data demo
-              </button>
-            </p>
-          )}
+          {/* Mode mock menghapus database di localStorage; mode live memanggil POST /dev/reset di backend. */}
+          <p className="flex flex-wrap items-center justify-center gap-1 text-sm text-muted">
+            Data demo berantakan?
+            <button
+              type="button"
+              onClick={() => {
+                if (window.confirm("Kembalikan semua data demo ke kondisi awal? Tiket dan pesan yang dibuat akan hilang.")) {
+                  void resetDemo();
+                }
+              }}
+              className="flex min-h-11 cursor-pointer items-center gap-1.5 rounded-lg px-1.5 font-semibold text-navy hover:text-violet"
+            >
+              <RotateCcw className="size-3.5" aria-hidden />
+              Reset data demo
+            </button>
+          </p>
         </main>
       </div>
     </div>

@@ -10,6 +10,7 @@
     "gen:api": "openapi-typescript ../contracts/openapi.yaml -o src/lib/api/schema.d.ts",
     "typecheck": "tsc --noEmit",
     "test:e2e": "playwright test",
+    "test:e2e:live": "playwright test -c playwright.live.config.ts",
     "demo:reset": "node scripts/reset-demo.mjs"
   },
   "dependencies": {

@@ -1,6 +1,7 @@
 import { execSync } from "node:child_process";
 import { rmSync } from "node:fs";
-import { expect, test, type Page } from "@playwright/test";
+import type { Page } from "@playwright/test";
+import { expect, test } from "./fixtures";
 
 /** Satu konteks browser per tes = localStorage bersih = data seed baru. */
 
