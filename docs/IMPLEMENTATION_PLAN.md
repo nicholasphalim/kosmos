@@ -365,12 +365,15 @@ backend/
    │  ├─ micro/              technician_matching, cost_estimation, evidence_verification, commission_calculation
    │  ├─ entity/             tenant_lease, complaint_ticket, technician, work_order, invoice, payment, financial_ledger
    │  └─ utility/            media_storage, ai_classification, notification
+   ├─ views/                 read model: merakit response dari beberapa service + otorisasi data
    ├─ dev/                   router /dev/reset
    ├─ seed.py
    └─ tests/
 ```
 
-Isi tiap service: `router.py`, `service.py`, `models.py` (khusus Entity), `schemas.py`. Adapter (`adapters/`) hanya untuk AI, WhatsApp, dan payment.
+Isi tiap service: `router.py`, `service.py`, `models.py` (tabel milik service itu). Adapter (`adapters/`) hanya untuk AI, WhatsApp, dan payment.
+
+`app/views/` setara fungsi `view*()` di mock: menggabungkan data beberapa Entity untuk response (misalnya tiket + nama unit + nama penghuni) dan memeriksa siapa boleh melihat data apa. Isinya bukan logika bisnis. Dengan begitu Entity tidak perlu saling meng-import.
 
 Aturan:
 - Alur pemanggilan `router → service`. Service Entity langsung memakai `Session` SQLAlchemy dan menjadi satu-satunya pemilik tabelnya.
@@ -411,9 +414,9 @@ npm run dev:all     # di root: backend (port 8000) + frontend mode live (port 30
 | Fase | Tanggal | Hasil |
 |---|---|---|
 | B0 | 24–25 Nov | Ubah mock + UI pemilik agar estimasi dibuat otomatis. Scaffold backend, config, db, model Tenant and Lease + Complaint Ticket, seed, auth demo, CORS, error handler, `/dev/reset`, tes rute vs `openapi.yaml` |
-| B1 | 26–29 Nov | Complaint Handling penuh + pemicu otomatis pencarian teknisi dan estimasi, media + `/media-files`. Frontend mode live jalan untuk alur ini |
+| B1 | 26–29 Nov | Complaint Handling penuh + pemicu otomatis pencarian teknisi dan estimasi, media + `/media-files`, notifikasi. Entity Work Order (model, seed, endpoint baca) ikut dikerjakan karena dashboard pemilik memanggil `GET /work-order`. Frontend mode live jalan untuk alur ini (`npm run test:e2e:live`) |
 | Gate | 29 Nov | Jika alur Complaint Handling belum jalan di mode live, cakupan B2 dipangkas sebelum memakai buffer |
-| B2 | 30 Nov – 3 Des | Repair Verification (model teknisi, work order, log, bukti, konfirmasi) |
+| B2 | 30 Nov – 3 Des | Repair Verification: persetujuan estimasi, jadwal, log servis, bukti, konfirmasi selesai |
 | B3 | 4–6 Des | Billing & Commission (invoice, payment, kas). 12 tes E2E lulus di mode live |
 | B4 | 7–9 Des | `npm run dev:all`, README (langkah `.env.local` dikembalikan), keputusan deploy |
 | Buffer | 10–14 Des | Perbaikan dan gladi demo |
@@ -427,7 +430,7 @@ Model tabel ditambahkan per fase. Dengan `create_all`, cukup hapus `kosmos.db` l
 | Rute sesuai kontrak | pytest mencocokkan path + method di `app.openapi()` dengan `contracts/openapi.yaml` |
 | Layering SOA | pytest memeriksa import: Entity dan Utility tidak meng-import `services.task`, Entity tidak meng-import Entity lain, Micro tidak meng-import `core.db` |
 | Aturan bisnis | pytest untuk state machine tiket dan work order (termasuk 409), validasi sewa, komisi |
-| Bentuk response | `response_model` FastAPI + 12 tes E2E Playwright dengan `NEXT_PUBLIC_API_MODE=live`. Validasi skema terhadap yaml untuk 3–4 endpoint kunci jika sempat |
+| Bentuk response | `response_model` FastAPI + 12 tes E2E Playwright di mode live (`npm run test:e2e:live`, backend port 8001 dengan database sementara). Validasi skema terhadap yaml untuk 3–4 endpoint kunci jika sempat |
 
 ---
 

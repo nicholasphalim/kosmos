@@ -1,12 +1,13 @@
 """Data demo awal, meniru frontend/src/mocks/db.ts. Tanggal dihitung relatif terhadap waktu seed.
 
 Jalankan manual: `uv run python -m app.seed` (menghapus semua data lalu mengisi ulang).
-Tabel Repair Verification dan Billing ditambahkan di fase B2/B3.
+Data Billing (invoice, pembayaran, kas) ditambahkan di fase B3.
 """
 
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import UTC, datetime
 
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.core.db import SessionLocal, buat_tabel, hapus_tabel
@@ -14,6 +15,13 @@ from app.core.waktu import menit_lalu, now_utc, tanggal_geser
 from app.services.entity.complaint_ticket.models import Keluhan, Tiket, TiketRiwayat
 from app.services.entity.technician.models import Teknisi
 from app.services.entity.tenant_lease.models import Pengguna, Properti, Sewa, Unit
+from app.services.entity.work_order.models import LogServis, WorkOrder
+from app.services.micro.cost_estimation import estimasi_biaya
+from app.services.micro.evidence_verification import Foto, verifikasi_bukti
+from app.services.micro.technician_matching import CalonTeknisi, jarak_km, match_teknisi
+from app.services.task.hmr.models import Estimasi
+from app.services.utility.media_storage.models import Lampiran
+from app.services.utility.notification.models import Notifikasi
 
 PENGGUNA = [
     (1, "Dea", "penghuni", "0812-xxxx-0101"),
@@ -82,6 +90,39 @@ TIKET_AWAL = [
 ]
 
 
+@dataclass
+class Perbaikan:
+    """Menit sebelum sekarang untuk tiap kejadian Repair Verification."""
+
+    teknisi: int
+    disetujui: int
+    wo: str
+    jadwal: int
+    tiba: int | None = None
+    mulai: int | None = None
+    selesai: int | None = None
+
+
+PERBAIKAN = {
+    48: Perbaikan(9, 12 * HARI - 40, "selesai", 11 * HARI + 600, 11 * HARI + 600, 11 * HARI + 590, 11 * HARI + 500),
+    49: Perbaikan(10, 6 * HARI - 30, "selesai", 5 * HARI + 900, 5 * HARI + 900, 5 * HARI + 895, 5 * HARI + 840),
+    52: Perbaikan(8, 3 * HARI - 60, "selesai", 2 * HARI + 300, 2 * HARI + 300, 2 * HARI + 295, 2 * HARI + 240),
+    51: Perbaikan(8, 25 * 60, "dikerjakan", 75, 70, 62),
+}
+
+
+def NOTIFIKASI(nama: dict[int, str]) -> list[tuple[int, str, str, str, int]]:
+    return [
+        (1, "TKT-0052", "invoice", "Tagihan perbaikan INV-0003 Rp 165.000 sudah terbit. Bayar sebelum jatuh tempo.", 2 * HARI + 240),
+        (8, "TKT-0051", "teknisi_ditugaskan", "Pekerjaan baru WO-0012: Lampu kamar mandi mati total, Kos Kenanga B-201.", 25 * 60),
+        (3, "TKT-0051", "progres", "Pak Slamet sudah tiba dan mulai memperbaiki.", 62),
+        (4, "TKT-0056", "tiket_dibuat", f"Keran kamar mandi tidak menutup. Unit B-202 ({nama[5]}).", 110),
+        (5, "TKT-0056", "tiket_dibuat", "Laporanmu diterima: Keran kamar mandi tidak menutup.", 110),
+        (4, "TKT-0057", "prioritas_tinggi", f"Stop kontak memercikkan api. Unit B-201 ({nama[3]}). Mohon segera dicek.", 18),
+        (3, "TKT-0057", "prioritas_tinggi", "Laporanmu diprioritaskan TINGGI. Pemilik sudah dikabari.", 18),
+    ]
+
+
 def isi_data(db: Session, now: datetime | None = None) -> None:
     now = now or now_utc()
     db.add_all(Pengguna(id=i, nama=n, role=r, no_wa=w) for i, n, r, w in PENGGUNA)
@@ -99,6 +140,25 @@ def isi_data(db: Session, now: datetime | None = None) -> None:
         for i, k, v, c, t, r, la, lo in TEKNISI
     )
 
+    db.flush()
+    nama = {i: n for i, n, _r, _w in PENGGUNA}
+    unit_ke_properti = {u: p for u, p, _n in UNIT}
+    nomor_unit = {u: n for u, _p, n in UNIT}
+    lokasi = {p: (la, lo) for p, _n, _o, la, lo in PROPERTI}
+    teknisi = {t[0]: t for t in TEKNISI}
+
+    def ringkas_teknisi(id_: int) -> dict:
+        _i, keahlian, verif, _c, _t, rating, _la, _lo = teknisi[id_]
+        no_wa = next(w for i, _n, _r, w in PENGGUNA if i == id_)
+        return {"id": id_, "nama": nama[id_], "keahlian": keahlian, "terverifikasi": verif, "rating": rating, "no_wa": no_wa}
+
+    def jarak_ke(id_unit: int, id_teknisi: int) -> float:
+        la, lo = lokasi[unit_ke_properti[id_unit]]
+        t = teknisi[id_teknisi]
+        return jarak_km(la, lo, t[6], t[7])
+
+    id_wo = 9  # sama dengan seq work_order di mock (WO-0009 dst.)
+    id_lampiran = 1
     for a in TIKET_AWAL:
         dibuat = menit_lalu(a.menit, now)
         db.add(Keluhan(id=a.id_keluhan, id_penghuni=a.penghuni, id_unit=a.unit, deskripsi=a.deskripsi,
@@ -111,8 +171,79 @@ def isi_data(db: Session, now: datetime | None = None) -> None:
         db.add(TiketRiwayat(id_tiket=a.id_tiket, dari=None, ke="dibuat", waktu=dibuat, oleh="sistem"))
         if a.status != "dibuat":
             db.add(TiketRiwayat(id_tiket=a.id_tiket, dari="dibuat", ke="diklasifikasi", waktu=dibuat, oleh="AI Classification"))
-        # Riwayat diproses/selesai beserta estimasi, work order, invoice, dan kas menyusul di B2/B3.
+
+        r = PERBAIKAN.get(a.id_tiket)
+        if r is None or a.kategori is None or a.urgensi is None:
+            continue
+
+        # Repair Verification: estimasi disetujui -> work order -> log servis.
+        est = estimasi_biaya(a.kategori, a.urgensi, a.deskripsi, jarak_ke(a.unit, r.teknisi))
+        waktu_setuju = menit_lalu(r.disetujui, now)
+        e = Estimasi(id_tiket=a.id_tiket, id_teknisi=r.teknisi, kandidat=[], rincian=est["rincian"], total=est["total"],
+                     status="disetujui", diputuskan_oleh=nama[4], diputuskan_at=waktu_setuju, created_at=menit_lalu(r.disetujui + 5, now))
+        db.add(e)
+        db.flush()
+        db.add(TiketRiwayat(id_tiket=a.id_tiket, dari="diklasifikasi", ke="diproses", waktu=waktu_setuju, oleh=nama[4]))
+
+        waktu_jadwal = menit_lalu(r.jadwal, now)
+        logs = [("dibuat", r.disetujui, "sistem", f"Ditugaskan ke {nama[r.teknisi]}"), ("jadwal", r.disetujui - 20, nama[a.penghuni], None)]
+        if r.tiba is not None:
+            logs.append(("tiba", r.tiba, nama[r.teknisi], None))
+        if r.mulai is not None:
+            logs.append(("mulai", r.mulai, nama[r.teknisi], "Cek instalasi dan ganti komponen yang rusak."))
+        id_sebelum = id_sesudah = None
+        verifikasi = None
+        if r.selesai is not None:
+            nu = nomor_unit[a.unit]
+            db.add_all([
+                Lampiran(id=id_lampiran, owner_type="bukti", owner_id=id_wo, url="/bukti/sebelum.svg",
+                         nama_file=f"sebelum-{nu}.jpg", mime="image/svg+xml", ukuran_byte=184_220),
+                Lampiran(id=id_lampiran + 1, owner_type="bukti", owner_id=id_wo, url="/bukti/sesudah.svg",
+                         nama_file=f"sesudah-{nu}.jpg", mime="image/svg+xml", ukuran_byte=201_904),
+            ])
+            id_sebelum, id_sesudah = id_lampiran, id_lampiran + 1
+            id_lampiran += 2
+            verifikasi = verifikasi_bukti(Foto("sebelum.jpg", "image/jpeg", 184_220), Foto("sesudah.jpg", "image/jpeg", 201_904))
+            logs.append(("bukti_valid", r.selesai + 10, "Evidence Verification", "4 dari 4 pemeriksaan lolos"))
+            logs.append(("selesai", r.selesai, nama[a.penghuni], "Penghuni mengonfirmasi perbaikan selesai"))
+            db.add(TiketRiwayat(id_tiket=a.id_tiket, dari="diproses", ke="selesai", waktu=menit_lalu(r.selesai, now), oleh=nama[a.penghuni]))
+        db.add(WorkOrder(
+            id=id_wo, id_tiket=a.id_tiket, id_teknisi=r.teknisi, id_estimasi=e.id, status=r.wo, biaya_final=est["total"],
+            slot_jadwal=[iso(waktu_jadwal)], jadwal_kunjungan=waktu_jadwal, id_bukti_sebelum=id_sebelum, id_bukti_sesudah=id_sesudah,
+            verifikasi=verifikasi, created_at=waktu_setuju,
+            updated_at=menit_lalu(next(x for x in (r.selesai, r.mulai, r.disetujui) if x is not None), now),
+        ))
+        db.flush()
+        db.add_all(LogServis(id_work_order=id_wo, aktivitas=akt, catatan=cat, oleh=oleh, waktu=menit_lalu(m, now)) for akt, m, oleh, cat in logs)
+        id_wo += 1
+        # Invoice, pembayaran, dan buku kas (Billing & Commission) ditambahkan di fase B3.
+
+    # Tiket yang sudah diklasifikasi otomatis dicarikan teknisi; estimasinya menunggu persetujuan pemilik.
+    db.flush()
+    for a in TIKET_AWAL:
+        if a.status != "diklasifikasi" or a.kategori is None or a.urgensi is None:
+            continue
+        beban = {i: db.scalar(select(func.count()).select_from(WorkOrder).where(
+            WorkOrder.id_teknisi == i, WorkOrder.status.not_in(("selesai", "dibatalkan")))) or 0 for i in teknisi}
+        kandidat = match_teknisi(a.kategori, a.urgensi, [
+            CalonTeknisi(teknisi=ringkas_teknisi(i), tersedia=t[4], jarak_km=jarak_ke(a.unit, i), beban=beban[i]) for i, t in teknisi.items()
+        ])
+        terpilih = next((k for k in kandidat if k["lolos"]), None)
+        if terpilih is None:
+            continue
+        est = estimasi_biaya(a.kategori, a.urgensi, a.deskripsi, terpilih["jarak_km"])
+        db.add(Estimasi(id_tiket=a.id_tiket, id_teknisi=terpilih["teknisi"]["id"], kandidat=kandidat, rincian=est["rincian"],
+                        total=est["total"], status="menunggu", created_at=menit_lalu(a.menit, now)))
+
+    for id_penerima, kode, jenis, isi, menit in NOTIFIKASI(nama):
+        no_wa = next(w for i, _n, _r, w in PENGGUNA if i == id_penerima)
+        db.add(Notifikasi(id_penerima=id_penerima, kode_tiket=kode, jenis=jenis, isi=isi, kanal="whatsapp", no_tujuan=no_wa,
+                          status_kirim="terkirim", provider="mock", created_at=menit_lalu(menit, now)))
     db.commit()
+
+
+def iso(d: datetime) -> str:
+    return d.astimezone(UTC).isoformat().replace("+00:00", "Z")
 
 
 def reset_semua() -> None:

@@ -68,6 +68,10 @@ def import_semua_model() -> None:
     from app.services.entity.complaint_ticket import models as _ct  # noqa: F401
     from app.services.entity.technician import models as _tk  # noqa: F401
     from app.services.entity.tenant_lease import models as _tl  # noqa: F401
+    from app.services.entity.work_order import models as _wo  # noqa: F401
+    from app.services.task.hmr import models as _hmr  # noqa: F401
+    from app.services.utility.media_storage import models as _ms  # noqa: F401
+    from app.services.utility.notification import models as _nt  # noqa: F401
 
 
 def buat_tabel() -> None:
