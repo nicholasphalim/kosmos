@@ -3,19 +3,18 @@
 import { Check, CirclePlus, Ticket, TriangleExclamationPoint } from "@/components/icons";
 import { useParams, useSearchParams } from "next/navigation";
 import { SparkleCluster } from "@/components/brand/Art";
-import { ServiceTrace } from "@/components/tiket/ServiceTrace";
+import { PerbaikanPenghuni } from "@/components/perbaikan/PerbaikanPenghuni";
 import { TiketDetailCard } from "@/components/tiket/TiketDetailCard";
 import { ButtonLink } from "@/components/ui/Button";
 import { ErrorState, Skeleton } from "@/components/ui/States";
 import { ApiError } from "@/lib/api/client";
-import { useTiketDetail, useTraceTiket } from "@/lib/api/hooks";
+import { useTiketDetail } from "@/lib/api/hooks";
 
 export default function TiketDetailPage() {
   const { id } = useParams<{ id: string }>();
   const baru = useSearchParams().get("baru") === "1";
   const idTiket = Number(id);
   const tiket = useTiketDetail(idTiket);
-  const trace = useTraceTiket(idTiket);
 
   return (
     <main className="page-rise mx-auto flex max-w-[860px] flex-col gap-6 px-3 pt-8 pb-16 sm:px-6">
@@ -52,8 +51,8 @@ export default function TiketDetailPage() {
         />
       )}
       {tiket.data && <TiketDetailCard tiket={tiket.data} />}
+      {tiket.data && <PerbaikanPenghuni idTiket={tiket.data.id} statusTiket={tiket.data.status} />}
 
-      {trace.data && <ServiceTrace steps={trace.data} />}
 
       <div className="flex flex-wrap gap-3">
         <ButtonLink href="/penghuni/tiket" size="lg" className="flex-[1_1_220px]" icon={<Ticket className="size-4.5" aria-hidden />}>

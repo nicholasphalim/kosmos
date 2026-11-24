@@ -1,6 +1,5 @@
 import { ArrowLeft, CalendarX, House } from "@/components/icons";
 import { Button } from "@/components/ui/Button";
-import { ServiceTrace } from "@/components/tiket/ServiceTrace";
 import type { KeluhanResponse, UnitRingkas } from "@/lib/api/types";
 import { tanggal } from "@/lib/format";
 import { Stiker } from "@/components/ui/Stiker";
@@ -45,7 +44,6 @@ export function LaporanDitolak({
           </Button>
         </div>
       </section>
-      <ServiceTrace steps={hasil.trace} />
     </main>
   );
 }

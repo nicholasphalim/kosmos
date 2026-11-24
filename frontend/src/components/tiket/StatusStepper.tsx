@@ -43,7 +43,8 @@ export function StatusStepper({ status, riwayat }: { status: StatusTiket; riwaya
   return (
     <ol className="grid grid-cols-[1fr_1fr_1fr_auto]">
       {ALUR.map((a, i) => {
-        const tahap: Tahap = i < posisi ? "done" : i === posisi ? "now" : "todo";
+        // Status akhir "selesai" ditampilkan tuntas, bukan sedang berjalan.
+        const tahap: Tahap = i < posisi || status === "selesai" ? "done" : i === posisi ? "now" : "todo";
         const g = GAYA[tahap];
         const waktu = riwayat.find((r) => r.ke === a.status);
         const catatan = waktu ? jamSaja(waktu.waktu) : a.status === "diproses" && tahap === "todo" ? "Menunggu pemilik" : "";

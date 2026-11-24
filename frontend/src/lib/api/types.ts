@@ -29,3 +29,26 @@ export type UbahStatusRequest = S["UbahStatusRequest"];
 export type KlasifikasiResponse = S["KlasifikasiResponse"];
 export type Notifikasi = S["Notifikasi"];
 export type ErrorResponse = S["ErrorResponse"];
+
+/* Repair Verification */
+export type StatusWorkOrder = S["StatusWorkOrder"];
+export type RincianBiaya = S["RincianBiaya"];
+export type TeknisiRingkas = S["TeknisiRingkas"];
+export type KandidatTeknisi = S["KandidatTeknisi"];
+export type EstimasiBiaya = S["EstimasiBiaya"];
+export type EstimasiResponse = S["EstimasiResponse"];
+export type PersetujuanResponse = S["PersetujuanResponse"];
+export type LogServis = S["LogServis"];
+export type VerifikasiBukti = S["VerifikasiBukti"];
+export type WorkOrder = S["WorkOrder"];
+export type LogRequest = S["LogRequest"];
+export type BuktiResponse = S["BuktiResponse"];
+export type KonfirmasiResponse = S["KonfirmasiResponse"];
+
+/* Billing & Commission */
+export type MetodePembayaran = S["MetodePembayaran"];
+export type Pembayaran = S["Pembayaran"];
+export type Invoice = S["Invoice"];
+export type BayarResponse = S["BayarResponse"];
+export type TransaksiKas = S["TransaksiKas"];
+export type LaporanKas = S["LaporanKas"];

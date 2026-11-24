@@ -1,7 +1,7 @@
 "use client";
 
 import { clsx } from "clsx";
-import { ChevronRight, House, RotateCcw, X } from "@/components/icons";
+import { ChevronRight, HardHat, House, RotateCcw, X } from "@/components/icons";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState, type KeyboardEvent } from "react";
@@ -19,8 +19,8 @@ import { Stiker } from "@/components/ui/Stiker";
 
 /** Avatar akun: pemilik memakai ikon orang, penghuni memakai maskot sesuai status sewa. */
 function AvatarAkun({ label }: { label: AkunDemo["label_sewa"] }) {
-  if (label === "pemilik") {
-    return <AstronotAvatar suasana="pemilik" className="size-12 shrink-0" />;
+  if (label === "pemilik" || label === "teknisi") {
+    return <AstronotAvatar suasana={label} className="size-12 shrink-0" />;
   }
   return (
     <>
@@ -34,6 +34,7 @@ function AvatarAkun({ label }: { label: AkunDemo["label_sewa"] }) {
 const TAB = [
   { role: "penghuni", label: "Penghuni", kerangka: 3 },
   { role: "pemilik", label: "Pemilik", kerangka: 1 },
+  { role: "teknisi", label: "Teknisi", kerangka: 3 },
 ] as const;
 
 type RoleTab = (typeof TAB)[number]["role"];
@@ -56,7 +57,8 @@ export default function LoginPage() {
   function pindahTab(e: KeyboardEvent<HTMLButtonElement>) {
     if (e.key !== "ArrowLeft" && e.key !== "ArrowRight") return;
     e.preventDefault();
-    const berikut = tab === "penghuni" ? "pemilik" : "penghuni";
+    const i = TAB.findIndex((t) => t.role === tab);
+    const berikut = TAB[(i + (e.key === "ArrowRight" ? 1 : TAB.length - 1)) % TAB.length].role;
     setTab(berikut);
     document.getElementById(`tab-${berikut}`)?.focus();
   }
@@ -145,6 +147,7 @@ export default function LoginPage() {
                       {a.label_sewa === "pemilik" && (
                         <Stiker varian="netral" ikon={House}>{a.jumlah_properti ?? 0} kos</Stiker>
                       )}
+                      {a.label_sewa === "teknisi" && <Stiker varian="aktif" ikon={HardHat}>Mitra</Stiker>}
                       <ChevronRight
                         className={clsx(
                           "size-4.5 shrink-0 text-subtle transition-transform duration-200 group-hover:translate-x-0.5 group-hover:text-violet",

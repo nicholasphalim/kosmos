@@ -8,6 +8,7 @@ export type FilterUrgensi = "semua" | Urgensi;
 export const TAB_PEMILIK: Array<{ id: TabPemilik; label: string }> = [
   { id: "aksi", label: "Perlu tindakan" },
   { id: "diproses", label: "Diproses" },
+  { id: "selesai", label: "Selesai" },
   { id: "dibatalkan", label: "Dibatalkan" },
 ];
 

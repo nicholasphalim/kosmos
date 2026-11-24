@@ -4,11 +4,12 @@ import { useRouter } from "next/navigation";
 import { useEffect, type ReactNode } from "react";
 import { FullPageLoader } from "@/components/ui/FullPageLoader";
 import type { Pengguna, Role } from "@/lib/api/types";
-import { useSession } from "@/lib/session";
+import { sessionStore, useSession } from "@/lib/session";
 
 export const BERANDA_ROLE: Record<Role, string> = {
   penghuni: "/penghuni/lapor",
   pemilik: "/pemilik",
+  teknisi: "/teknisi",
 };
 
 /**
@@ -21,9 +22,12 @@ export function RoleGuard({ role, children }: { role: Role; children: (pengguna:
   const salahRole = session && session.pengguna.role !== role;
 
   useEffect(() => {
-    if (!session) router.replace("/login");
-    else if (salahRole) router.replace(BERANDA_ROLE[session.pengguna.role]);
-  }, [session, salahRole, router]);
+    // Baca store langsung: saat hydration, `session` masih snapshot server (null)
+    // walau sesi ada di localStorage. Tanpa ini, reload halaman mana pun terlempar ke beranda.
+    const aktif = sessionStore.get();
+    if (!aktif) router.replace("/login");
+    else if (aktif.pengguna.role !== role) router.replace(BERANDA_ROLE[aktif.pengguna.role]);
+  }, [session, role, router]);
 
   if (!session || salahRole) return <FullPageLoader />;
   return children(session.pengguna);

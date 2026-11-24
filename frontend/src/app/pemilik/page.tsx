@@ -10,7 +10,7 @@ import { TiketFilterBar } from "@/components/pemilik/TiketFilterBar";
 import { TiketPemilikItem } from "@/components/pemilik/TiketPemilikItem";
 import { Button } from "@/components/ui/Button";
 import { EmptyState, ErrorState, Skeleton } from "@/components/ui/States";
-import { useKlasifikasiUlang, useTiketList, useUbahStatusTiket } from "@/lib/api/hooks";
+import { useKlasifikasiUlang, useTiketList, useUbahStatusTiket, useWorkOrderList } from "@/lib/api/hooks";
 import { useSession } from "@/lib/session";
 import { filterTiketPemilik, hitungPerTab, tabDariStatus, type FilterUrgensi, type TabPemilik } from "@/lib/tiketFilter";
 import { Stiker } from "@/components/ui/Stiker";
@@ -22,6 +22,8 @@ export default function PemilikPage() {
   const outbox = useOutbox(pengguna.id);
   const ubahStatus = useUbahStatusTiket();
   const klasifikasi = useKlasifikasiUlang();
+  const workOrder = useWorkOrderList();
+  const statusWo = new Map(workOrder.data?.map((w) => [w.id_tiket, w.status]));
 
   const [tab, setTab] = useState<TabPemilik>("aksi");
   const [urgensi, setUrgensi] = useState<FilterUrgensi>("semua");
@@ -36,17 +38,15 @@ export default function PemilikPage() {
   const gagal = ubahStatus.error ?? klasifikasi.error;
 
   function aksiSedang(idTiket: number) {
-    if (ubahStatus.isPending && ubahStatus.variables?.idTiket === idTiket) {
-      return ubahStatus.variables.status === "diproses" ? "proses" : "batal";
-    }
+    if (ubahStatus.isPending && ubahStatus.variables?.idTiket === idTiket) return "batal";
     if (klasifikasi.isPending && klasifikasi.variables === idTiket) return "klasifikasi";
     return null;
   }
 
-  function jalankan(idTiket: number, kode: string, aksi: "proses" | "batal" | "klasifikasi") {
+  function jalankan(idTiket: number, kode: string, aksi: "batal" | "klasifikasi") {
     if (aksi === "klasifikasi") return klasifikasi.mutate(idTiket);
-    if (aksi === "batal" && !window.confirm(`Batalkan tiket ${kode}? Penghuni akan dikabari.`)) return;
-    ubahStatus.mutate({ idTiket, status: aksi === "proses" ? "diproses" : "dibatalkan" });
+    if (!window.confirm(`Batalkan tiket ${kode}? Penghuni akan dikabari.`)) return;
+    ubahStatus.mutate({ idTiket, status: "dibatalkan" });
   }
 
   return (
@@ -142,7 +142,7 @@ export default function PemilikPage() {
           {tampil.length > 0 && (
             <ul className="px-2 pb-2">
               {tampil.map((t) => (
-                <TiketPemilikItem key={t.id} tiket={t} sedang={aksiSedang(t.id)} onAksi={(a) => jalankan(t.id, t.kode, a)} />
+                <TiketPemilikItem key={t.id} tiket={t} statusWo={statusWo.get(t.id)} sedang={aksiSedang(t.id)} onAksi={(a) => jalankan(t.id, t.kode, a)} />
               ))}
             </ul>
           )}
