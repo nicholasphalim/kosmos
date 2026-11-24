@@ -65,8 +65,8 @@ export function TiketPemilikItem({ tiket: t, statusWo, sedang, onAksi }: Props) 
           </Button>
         )}
         {t.status === "diklasifikasi" && (
-          <ButtonLink href={href} icon={<HardHat className="size-4.5" aria-hidden />}>
-            Cari teknisi
+          <ButtonLink href={href} aria-label={`Tinjau ${t.kode}`} icon={<HardHat className="size-4.5" aria-hidden />}>
+            Tinjau
           </ButtonLink>
         )}
         {t.status === "diproses" && (
@@ -76,7 +76,7 @@ export function TiketPemilikItem({ tiket: t, statusWo, sedang, onAksi }: Props) 
         )}
         {t.status === "selesai" && (
           <Link href={href} aria-label={`Lihat ${t.kode}`} className="no-underline">
-            <Stiker varian="aktif" ikon={Check}>Selesai</Stiker>
+            <Stiker varian="aktif" ikon={Check}>{t.penanganan === "sendiri" ? "Selesai · ditangani sendiri" : "Selesai"}</Stiker>
           </Link>
         )}
         {t.status === "dibatalkan" && <Stiker varian="berakhir" ikon={X}>Dibatalkan</Stiker>}

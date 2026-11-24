@@ -8,7 +8,7 @@ import { TiketDetailCard } from "@/components/tiket/TiketDetailCard";
 import { Button } from "@/components/ui/Button";
 import { ErrorState, Skeleton } from "@/components/ui/States";
 import { ApiError } from "@/lib/api/client";
-import { useTiketDetail, useUbahStatusTiket } from "@/lib/api/hooks";
+import { useTiketDetail, useUbahStatusTiket, useWorkOrderTiket } from "@/lib/api/hooks";
 
 /** Detail tiket sisi pemilik: Complaint Handling (kiri) + Repair Verification (kanan). */
 export default function PemilikTiketPage() {
@@ -16,7 +16,10 @@ export default function PemilikTiketPage() {
   const idTiket = Number(id);
   const tiket = useTiketDetail(idTiket);
   const batal = useUbahStatusTiket();
+  const wo = useWorkOrderTiket(idTiket);
   const bisaBatal = tiket.data && tiket.data.status !== "selesai" && tiket.data.status !== "dibatalkan";
+  // Pembatalan setelah teknisi tiba tetap menerbitkan tagihan biaya kunjungan.
+  const sudahTiba = wo.data?.log.some((l) => l.aktivitas === "tiba") && wo.data.status !== "selesai" && wo.data.status !== "dibatalkan";
 
   return (
     <main className="page-rise mx-auto flex max-w-[1240px] flex-col gap-6 px-3 pt-8 pb-16 sm:px-6">
@@ -36,8 +39,15 @@ export default function PemilikTiketPage() {
             loading={batal.isPending}
             icon={<X className="size-4" aria-hidden />}
             className="hover:border-danger-dot/50 hover:bg-danger-bg hover:text-danger"
+            title="Untuk laporan salah atau duplikat. Kalau masalahnya sudah kamu atasi, pakai Tangani sendiri."
             onClick={() => {
-              if (window.confirm(`Batalkan tiket ${tiket.data!.kode}? Penghuni dan teknisi akan dikabari.`)) {
+              const pesan = [
+                `Batalkan tiket ${tiket.data!.kode}? Laporan ini tidak akan ditindaklanjuti (mis. salah atau duplikat).`,
+                tiket.data!.status === "diklasifikasi" ? "Kalau masalahnya sudah kamu atasi, pilih “Tangani sendiri” saja." : "",
+                sudahTiba ? "Teknisi sudah datang, jadi biaya kunjungan tetap ditagihkan ke kamu." : "",
+                "Penghuni dan teknisi akan dikabari.",
+              ].filter(Boolean);
+              if (window.confirm(pesan.join("\n\n"))) {
                 batal.mutate({ idTiket, status: "dibatalkan" });
               }
             }}

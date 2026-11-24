@@ -22,13 +22,19 @@ export function InvoiceKartu({ invoice: i }: { invoice: Invoice }) {
             </span>
           </div>
         </div>
-        <StatusInvoiceStiker status={i.status} />
+        <StatusInvoiceStiker status={i.status} terlambat={i.terlambat} />
       </div>
+
+      {i.jenis === "kunjungan" && (
+        <p className="rounded-2xl bg-warn-bg px-4 py-3 text-[13px] font-semibold text-warn">
+          Tiket dibatalkan setelah teknisi tiba di lokasi, jadi yang ditagihkan hanya biaya pengecekan dan transport.
+        </p>
+      )}
 
       <dl className="grid grid-cols-[repeat(auto-fit,minmax(150px,1fr))] gap-3 text-sm">
         {[
-          { ikon: Building, label: "Unit", nilai: `${i.unit.nama_properti} · ${i.unit.nomor_unit}` },
-          { ikon: User, label: "Ditagihkan ke", nilai: i.penghuni.nama },
+          { ikon: Building, label: "Unit", nilai: `${i.unit.nama_properti} · ${i.unit.nomor_unit} (${i.penghuni.nama})` },
+          { ikon: User, label: "Ditagihkan ke", nilai: i.pemilik.nama },
           { ikon: HardHat, label: "Teknisi", nilai: i.teknisi },
         ].map((d) => (
           <div key={d.label} className="flex items-center gap-2.5 rounded-2xl bg-white/60 px-3.5 py-3">
@@ -47,7 +53,7 @@ export function InvoiceKartu({ invoice: i }: { invoice: Invoice }) {
         <Info className="size-4.5 shrink-0" aria-hidden />
         <span>
           Komisi Kosmos {i.persen_komisi}% ({rupiah(i.komisi)}) sudah termasuk dan dipotong dari bagian teknisi, bukan biaya tambahan.
-          {i.status === "belum_dibayar" && ` Jatuh tempo ${tanggal(i.jatuh_tempo)}.`}
+          {i.status === "belum_dibayar" && (i.terlambat ? ` Sudah lewat jatuh tempo ${tanggal(i.jatuh_tempo)}.` : ` Jatuh tempo ${tanggal(i.jatuh_tempo)}.`)}
         </span>
       </p>
 

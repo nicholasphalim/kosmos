@@ -104,6 +104,7 @@ export const LABEL_STATUS_WO: Record<StatusWorkOrder, string> = {
   dijadwalkan: "Dijadwalkan",
   dikerjakan: "Dikerjakan",
   menunggu_konfirmasi: "Menunggu konfirmasi",
+  menunggu_pemilik: "Menunggu pemilik",
   selesai: "Selesai",
   dibatalkan: "Dibatalkan",
 };
@@ -124,7 +125,12 @@ export const LABEL_LOG: Record<LogServis["aktivitas"], string> = {
   bukti_valid: "Bukti terverifikasi",
   bukti_ditolak: "Bukti ditolak",
   belum_beres: "Penghuni: belum beres",
-  selesai: "Perbaikan selesai",
+  dikonfirmasi_penghuni: "Penghuni: sudah beres",
+  perbaikan_ulang: "Pemilik minta perbaikan ulang",
+  biaya_tambahan: "Biaya tambahan diajukan",
+  biaya_tambahan_disetujui: "Biaya tambahan disetujui",
+  biaya_tambahan_ditolak: "Biaya tambahan ditolak",
+  selesai: "Hasil diterima pemilik",
   dibatalkan: "Dibatalkan",
 };
 
@@ -136,3 +142,12 @@ export function jadwal(iso: string): string {
 }
 
 export const kodeInvoice = (id: number) => `INV-${String(id).padStart(4, "0")}`;
+export const kodeTagihanSewa = (id: number) => `SWA-${String(id).padStart(4, "0")}`;
+
+const bulanTahun = new Intl.DateTimeFormat("id-ID", { month: "long", year: "numeric" });
+
+/** "2026-11" -> "November 2026". */
+export function labelPeriode(periode: string): string {
+  const [th, bl] = periode.split("-").map(Number);
+  return bulanTahun.format(new Date(th, bl - 1, 1));
+}

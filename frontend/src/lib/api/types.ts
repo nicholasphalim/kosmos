@@ -10,6 +10,7 @@ export type Role = S["Role"];
 export type StatusTiket = S["StatusTiket"];
 export type Kategori = S["Kategori"];
 export type Urgensi = S["Urgensi"];
+export type Penanganan = S["Penanganan"];
 export type Layer = S["Layer"];
 
 export type Pengguna = S["Pengguna"];
@@ -33,6 +34,7 @@ export type ErrorResponse = S["ErrorResponse"];
 /* Repair Verification */
 export type StatusWorkOrder = S["StatusWorkOrder"];
 export type RincianBiaya = S["RincianBiaya"];
+export type BiayaTambahan = S["BiayaTambahan"];
 export type TeknisiRingkas = S["TeknisiRingkas"];
 export type KandidatTeknisi = S["KandidatTeknisi"];
 export type EstimasiBiaya = S["EstimasiBiaya"];
@@ -52,3 +54,9 @@ export type Invoice = S["Invoice"];
 export type BayarResponse = S["BayarResponse"];
 export type TransaksiKas = S["TransaksiKas"];
 export type LaporanKas = S["LaporanKas"];
+export type BayarSekaligusResponse = S["BayarSekaligusResponse"];
+
+/* Rent Billing */
+export type TagihanSewa = S["TagihanSewa"];
+export type TerbitkanSewaResponse = S["TerbitkanSewaResponse"];
+export type BayarSewaResponse = S["BayarSewaResponse"];

@@ -13,6 +13,8 @@ import {
   invoice,
   mediaStorage,
   notification,
+  rb,
+  rentInvoice,
   ServiceError,
   tenantLease,
   workOrder,
@@ -73,7 +75,7 @@ export const handlers = [
     handle(async ({ request, params }) => {
       const u = user(request);
       const body = (await request.json()) as UbahStatusRequest;
-      return HttpResponse.json(await hmr.ubahStatus(u, idParam(params.id_tiket), body.status));
+      return HttpResponse.json(await hmr.ubahStatus(u, idParam(params.id_tiket), body.status, body.catatan));
     }),
   ),
 
@@ -102,6 +104,24 @@ export const handlers = [
     handle(async ({ request, params }) => {
       const body = (await request.json()) as { disetujui: boolean };
       return HttpResponse.json(await hmr.setPersetujuan(user(request), idParam(params.id_estimasi), Boolean(body.disetujui)));
+    }),
+  ),
+
+  http.post(
+    `${BASE}/hmr/tiket/:id_tiket/buka-ulang`,
+    handle(async ({ request, params }) => {
+      const body = (await request.json()) as { alasan?: string };
+      return HttpResponse.json(await hmr.bukaUlang(user(request), idParam(params.id_tiket), body.alasan ?? ""));
+    }),
+  ),
+
+  http.post(
+    `${BASE}/hmr/work-order/:id_work_order/biaya-tambahan/:id_tambahan/persetujuan`,
+    handle(async ({ request, params }) => {
+      const body = (await request.json()) as { disetujui?: boolean };
+      return HttpResponse.json(
+        await hmr.putuskanBiayaTambahan(user(request), idParam(params.id_work_order), idParam(params.id_tambahan), Boolean(body.disetujui)),
+      );
     }),
   ),
 
@@ -144,6 +164,34 @@ export const handlers = [
   ),
 
   http.post(
+    `${BASE}/csm/work-order/:id_work_order/terima`,
+    handle(async ({ request, params }) => {
+      const body = (await request.json()) as { diterima: boolean; catatan?: string };
+      return HttpResponse.json(await csm.terima(user(request), idParam(params.id_work_order), Boolean(body.diterima), body.catatan));
+    }),
+  ),
+
+  http.post(
+    `${BASE}/csm/work-order/:id_work_order/biaya-tambahan`,
+    handle(async ({ request, params }) => {
+      const body = (await request.json()) as { alasan?: string; jumlah?: number };
+      return HttpResponse.json(
+        await csm.ajukanBiayaTambahan(user(request), idParam(params.id_work_order), body.alasan ?? "", Number(body.jumlah)),
+        { status: 201 },
+      );
+    }),
+  ),
+
+  http.post(
+    `${BASE}/csm/invoice/bayar-sekaligus`,
+    handle(async ({ request }) => {
+      const body = (await request.json()) as { id_invoice?: number[]; metode: MetodePembayaran; simulasi_gagal?: boolean };
+      const ids = Array.isArray(body.id_invoice) ? body.id_invoice.map(Number) : [];
+      return HttpResponse.json(await csm.bayarSekaligus(user(request), ids, body.metode, Boolean(body.simulasi_gagal)));
+    }),
+  ),
+
+  http.post(
     `${BASE}/csm/invoice/:id_invoice/bayar`,
     handle(async ({ request, params }) => {
       const body = (await request.json()) as { metode: MetodePembayaran; simulasi_gagal?: boolean };
@@ -170,6 +218,27 @@ export const handlers = [
   http.get(
     `${BASE}/invoice/:id_invoice`,
     handle(({ request, params }) => HttpResponse.json(invoice.detail(user(request), idParam(params.id_invoice)))),
+  ),
+
+  /* ----- Task: Rent Billing + Entity: Rent Invoice ----- */
+  http.post(
+    `${BASE}/rb/tagihan-sewa/terbitkan`,
+    handle(async ({ request }) => HttpResponse.json(await rb.terbitkan(user(request)), { status: 201 })),
+  ),
+
+  http.post(
+    `${BASE}/rb/tagihan-sewa/:id_tagihan/bayar`,
+    handle(async ({ request, params }) => {
+      const body = (await request.json()) as { metode: MetodePembayaran; simulasi_gagal?: boolean };
+      return HttpResponse.json(await rb.bayar(user(request), idParam(params.id_tagihan), body.metode, Boolean(body.simulasi_gagal)));
+    }),
+  ),
+
+  http.get(`${BASE}/tagihan-sewa`, handle(({ request }) => HttpResponse.json(rentInvoice.list(user(request))))),
+
+  http.get(
+    `${BASE}/tagihan-sewa/:id_tagihan`,
+    handle(({ request, params }) => HttpResponse.json(rentInvoice.detail(user(request), idParam(params.id_tagihan)))),
   ),
 
   http.get(`${BASE}/laporan-kas`, handle(({ request }) => HttpResponse.json(csm.laporanKas(user(request))))),

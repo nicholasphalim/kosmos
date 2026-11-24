@@ -20,6 +20,8 @@ export const qk = {
   invoiceList: ["invoice"] as const,
   invoice: (id: number) => ["invoice", id] as const,
   laporanKas: ["laporan-kas"] as const,
+  sewaList: ["tagihan-sewa"] as const,
+  sewa: (id: number) => ["tagihan-sewa", id] as const,
 };
 
 /* ---------- Auth (demo) ---------- */
@@ -127,16 +129,31 @@ function useTiketMutation<TVars>(call: (vars: TVars) => Promise<TiketDetail>) {
       queryClient.setQueryData(qk.tiket(tiket.id), tiket);
       void queryClient.invalidateQueries({ queryKey: qk.tiketList, exact: true });
       void queryClient.invalidateQueries({ queryKey: qk.notifikasi });
+      // Pembatalan bisa ikut membatalkan work order dan menerbitkan invoice biaya kunjungan.
+      void queryClient.invalidateQueries({ queryKey: qk.workOrderTiket(tiket.id) });
+      void queryClient.invalidateQueries({ queryKey: qk.estimasi(tiket.id) });
+      for (const key of [qk.workOrderList, qk.invoiceList, qk.laporanKas]) void queryClient.invalidateQueries({ queryKey: key });
     },
   });
 }
 
 export function useUbahStatusTiket() {
-  return useTiketMutation(async (vars: { idTiket: number; status: UbahStatusRequest["status"] }) =>
+  return useTiketMutation(async (vars: { idTiket: number; status: UbahStatusRequest["status"]; catatan?: string }) =>
     unwrap(
       await api.POST("/hmr/tiket/{id_tiket}/status", {
         params: { path: { id_tiket: vars.idTiket } },
-        body: { status: vars.status },
+        body: { status: vars.status, catatan: vars.catatan },
+      }),
+    ),
+  );
+}
+
+export function useBukaUlangTiket() {
+  return useTiketMutation(async (vars: { idTiket: number; alasan: string }) =>
+    unwrap(
+      await api.POST("/hmr/tiket/{id_tiket}/buka-ulang", {
+        params: { path: { id_tiket: vars.idTiket } },
+        body: { alasan: vars.alasan },
       }),
     ),
   );
@@ -314,6 +331,54 @@ export function useKonfirmasiSelesai() {
   });
 }
 
+/** Pemilik menerima hasil perbaikan (invoice terbit) atau meminta perbaikan ulang. */
+export function usePenerimaanPemilik() {
+  const queryClient = useQueryClient();
+  const segarkan = useSegarkanPerbaikan();
+  return useMutation({
+    mutationFn: async (vars: { idWo: number; diterima: boolean; catatan?: string }) =>
+      unwrap(
+        await api.POST("/csm/work-order/{id_work_order}/terima", {
+          params: { path: { id_work_order: vars.idWo } },
+          body: { diterima: vars.diterima, catatan: vars.catatan },
+        }),
+      ),
+    onSuccess: (res) => {
+      queryClient.setQueryData(qk.tiket(res.tiket.id), res.tiket);
+      if (res.invoice) queryClient.setQueryData(qk.invoice(res.invoice.id), res.invoice);
+      segarkan(res.work_order);
+    },
+  });
+}
+
+export function useAjukanBiayaTambahan() {
+  const segarkan = useSegarkanPerbaikan();
+  return useMutation({
+    mutationFn: async (vars: { idWo: number; alasan: string; jumlah: number }) =>
+      unwrap(
+        await api.POST("/csm/work-order/{id_work_order}/biaya-tambahan", {
+          params: { path: { id_work_order: vars.idWo } },
+          body: { alasan: vars.alasan, jumlah: vars.jumlah },
+        }),
+      ),
+    onSuccess: (wo) => segarkan(wo),
+  });
+}
+
+export function usePersetujuanBiayaTambahan() {
+  const segarkan = useSegarkanPerbaikan();
+  return useMutation({
+    mutationFn: async (vars: { idWo: number; idTambahan: number; disetujui: boolean }) =>
+      unwrap(
+        await api.POST("/hmr/work-order/{id_work_order}/biaya-tambahan/{id_tambahan}/persetujuan", {
+          params: { path: { id_work_order: vars.idWo, id_tambahan: vars.idTambahan } },
+          body: { disetujui: vars.disetujui },
+        }),
+      ),
+    onSuccess: (wo) => segarkan(wo),
+  });
+}
+
 /* ===================================================================== */
 /* Billing & Commission                                                   */
 /* ===================================================================== */
@@ -358,5 +423,77 @@ export function useLaporanKas() {
   return useQuery({
     queryKey: qk.laporanKas,
     queryFn: async () => unwrap(await api.GET("/laporan-kas")),
+  });
+}
+
+/** Bayar beberapa invoice perbaikan dalam satu transaksi gateway. */
+export function useBayarSekaligus() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (vars: { ids: number[]; metode: MetodePembayaran; simulasiGagal: boolean }) =>
+      unwrap(
+        await api.POST("/csm/invoice/bayar-sekaligus", {
+          body: { id_invoice: vars.ids, metode: vars.metode, simulasi_gagal: vars.simulasiGagal },
+        }),
+      ),
+    onSuccess: (res) => {
+      for (const inv of res.invoice) {
+        queryClient.setQueryData(qk.invoice(inv.id), inv);
+        void queryClient.invalidateQueries({ queryKey: qk.workOrderTiket(inv.id_tiket) });
+      }
+      void queryClient.invalidateQueries({ queryKey: qk.invoiceList, exact: true });
+      void queryClient.invalidateQueries({ queryKey: qk.notifikasi });
+      void queryClient.invalidateQueries({ queryKey: qk.laporanKas });
+    },
+  });
+}
+
+/* ===================================================================== */
+/* Rent Billing                                                           */
+/* ===================================================================== */
+
+export function useTagihanSewaList() {
+  return useQuery({
+    queryKey: qk.sewaList,
+    queryFn: async () => unwrap(await api.GET("/tagihan-sewa")),
+  });
+}
+
+export function useTagihanSewa(id: number) {
+  return useQuery({
+    queryKey: qk.sewa(id),
+    queryFn: async () => unwrap(await api.GET("/tagihan-sewa/{id_tagihan}", { params: { path: { id_tagihan: id } } })),
+    enabled: Number.isFinite(id),
+  });
+}
+
+export function useTerbitkanSewa() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async () => unwrap(await api.POST("/rb/tagihan-sewa/terbitkan")),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: qk.sewaList, exact: true });
+      void queryClient.invalidateQueries({ queryKey: qk.laporanKas });
+      void queryClient.invalidateQueries({ queryKey: qk.notifikasi });
+    },
+  });
+}
+
+export function useBayarSewa() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (vars: { id: number; metode: MetodePembayaran; simulasiGagal: boolean }) =>
+      unwrap(
+        await api.POST("/rb/tagihan-sewa/{id_tagihan}/bayar", {
+          params: { path: { id_tagihan: vars.id } },
+          body: { metode: vars.metode, simulasi_gagal: vars.simulasiGagal },
+        }),
+      ),
+    onSuccess: (res) => {
+      queryClient.setQueryData(qk.sewa(res.tagihan.id), res.tagihan);
+      void queryClient.invalidateQueries({ queryKey: qk.sewaList, exact: true });
+      void queryClient.invalidateQueries({ queryKey: qk.notifikasi });
+      void queryClient.invalidateQueries({ queryKey: qk.laporanKas });
+    },
   });
 }

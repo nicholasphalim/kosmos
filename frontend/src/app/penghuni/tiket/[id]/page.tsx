@@ -51,7 +51,7 @@ export default function TiketDetailPage() {
         />
       )}
       {tiket.data && <TiketDetailCard tiket={tiket.data} />}
-      {tiket.data && <PerbaikanPenghuni idTiket={tiket.data.id} statusTiket={tiket.data.status} />}
+      {tiket.data && <PerbaikanPenghuni tiket={tiket.data} />}
 
 
       <div className="flex flex-wrap gap-3">

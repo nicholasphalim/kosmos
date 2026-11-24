@@ -13,7 +13,7 @@ import {
 import { AstronotAvatar } from "@/components/brand/AstronotAvatar";
 import { LampiranThumb } from "@/components/tiket/LampiranThumb";
 import { Stiker, type VarianStiker } from "@/components/ui/Stiker";
-import type { Invoice, KandidatTeknisi, LogServis, RincianBiaya, StatusWorkOrder, TeknisiRingkas, VerifikasiBukti, WorkOrder } from "@/lib/api/types";
+import type { BiayaTambahan, Invoice, KandidatTeknisi, LogServis, RincianBiaya, StatusWorkOrder, TeknisiRingkas, VerifikasiBukti, WorkOrder } from "@/lib/api/types";
 import { jadwal, jamSaja, LABEL_KATEGORI, LABEL_LOG, LABEL_STATUS_WO, rupiah, waktuLengkap } from "@/lib/format";
 
 /* ---------- Badge status ---------- */
@@ -23,6 +23,7 @@ const GAYA_WO: Record<StatusWorkOrder, { varian: VarianStiker; ikon: IkonKosmos 
   dijadwalkan: { varian: "rendah", ikon: CalendarCheck },
   dikerjakan: { varian: "sedang", ikon: Wrench },
   menunggu_konfirmasi: { varian: "review", ikon: ShieldCheck },
+  menunggu_pemilik: { varian: "review", ikon: ShieldCheck },
   selesai: { varian: "aktif", ikon: Check },
   dibatalkan: { varian: "berakhir", ikon: X },
 };
@@ -36,11 +37,39 @@ export function StatusWoStiker({ status }: { status: StatusWorkOrder }) {
   );
 }
 
-export function StatusInvoiceStiker({ status }: { status: Invoice["status"] }) {
-  return status === "lunas" ? (
-    <Stiker varian="aktif" ikon={Wallet}>Lunas</Stiker>
+export function StatusInvoiceStiker({ status, terlambat = false }: { status: Invoice["status"]; terlambat?: boolean }) {
+  if (status === "lunas") return <Stiker varian="aktif" ikon={Wallet}>Lunas</Stiker>;
+  return terlambat ? (
+    <Stiker varian="berakhir" ikon={Receipt}>Terlambat</Stiker>
   ) : (
     <Stiker varian="sedang" ikon={Receipt}>Belum dibayar</Stiker>
+  );
+}
+
+/** Daftar pengajuan biaya tambahan teknisi beserta statusnya. */
+export function DaftarBiayaTambahan({ wo, aksi }: { wo: WorkOrder; aksi?: (b: BiayaTambahan) => React.ReactNode }) {
+  if (wo.biaya_tambahan.length === 0) return null;
+  return (
+    <ul className="flex flex-col gap-2">
+      {wo.biaya_tambahan.map((b) => (
+        <li key={b.id} className="flex flex-col gap-2.5 rounded-2xl border border-line-soft px-4 py-3">
+          <span className="flex flex-wrap items-center gap-x-3 gap-y-1">
+            <span className="min-w-0 flex-1 text-sm">
+              <span className="font-bold">Biaya tambahan {rupiah(b.jumlah)}</span>
+              <span className="block text-navy-soft">{b.alasan}</span>
+            </span>
+            {b.status === "menunggu" ? (
+              <Stiker varian="review">Menunggu pemilik</Stiker>
+            ) : b.status === "disetujui" ? (
+              <Stiker varian="aktif" ikon={Check}>Disetujui</Stiker>
+            ) : (
+              <Stiker varian="berakhir" ikon={X}>Ditolak</Stiker>
+            )}
+          </span>
+          {b.status === "menunggu" && aksi?.(b)}
+        </li>
+      ))}
+    </ul>
   );
 }
 
@@ -128,6 +157,7 @@ const POSISI_WO: Record<StatusWorkOrder, number> = {
   dijadwalkan: 2,
   dikerjakan: 2,
   menunggu_konfirmasi: 4,
+  menunggu_pemilik: 4,
   selesai: 5,
   dibatalkan: -1,
 };
@@ -141,7 +171,13 @@ export function WoStepper({ wo }: { wo: WorkOrder }) {
     wo.jadwal_kunjungan ? jadwal(wo.jadwal_kunjungan) : "Menunggu penghuni",
     waktuLog("tiba") ? `Tiba ${jamSaja(waktuLog("tiba")!)}` : "",
     waktuLog("bukti_valid") ? jamSaja(waktuLog("bukti_valid")!) : "",
-    wo.status === "menunggu_konfirmasi" ? "Menunggu penghuni" : waktuLog("selesai") ? jamSaja(waktuLog("selesai")!) : "",
+    wo.status === "menunggu_konfirmasi"
+      ? "Menunggu penghuni"
+      : wo.status === "menunggu_pemilik"
+        ? "Menunggu pemilik"
+        : waktuLog("selesai")
+          ? jamSaja(waktuLog("selesai")!)
+          : "",
   ];
   return (
     <ol className="grid grid-cols-[1fr_1fr_1fr_1fr_auto]">
@@ -187,7 +223,7 @@ export function LogServisTimeline({ log }: { log: LogServis[] }) {
               aria-hidden
               className={clsx(
                 "size-3 shrink-0 rounded-full border-2",
-                l.aktivitas === "bukti_ditolak" || l.aktivitas === "belum_beres" || l.aktivitas === "dibatalkan"
+                ["bukti_ditolak", "belum_beres", "dibatalkan", "perbaikan_ulang", "biaya_tambahan_ditolak"].includes(l.aktivitas)
                   ? "border-danger-dot bg-danger-bg"
                   : i === 0
                     ? "border-navy bg-lavender"

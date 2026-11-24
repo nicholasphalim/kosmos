@@ -68,8 +68,25 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Batalkan tiket (beserta work order yang berjalan) lalu kirim notifikasi ke penghuni dan pemilik */
+        /** Pemilik menutup tiket tanpa teknisi (selesai) atau membatalkannya beserta work order yang berjalan. Bila teknisi sudah tiba di lokasi, pembatalan menerbitkan invoice biaya kunjungan ke pemilik */
         post: operations["ubahStatusTiket"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/hmr/tiket/{id_tiket}/buka-ulang": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Penghuni membuka ulang tiket yang ditutup pemilik tanpa teknisi (paling lama 7 hari setelah ditutup). Tiket kembali ke status diklasifikasi dan pemilik dikabari. */
+        post: operations["bukaUlangTiket"];
         delete?: never;
         options?: never;
         head?: never;
@@ -149,6 +166,40 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/hmr/work-order/{id_work_order}/biaya-tambahan/{id_tambahan}/persetujuan": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Pemilik menyetujui atau menolak biaya tambahan yang diajukan teknisi. Disetujui menambah biaya final */
+        post: operations["setPersetujuanBiayaTambahan"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/csm/work-order/{id_work_order}/biaya-tambahan": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Teknisi mengajukan biaya tambahan di luar estimasi (saat dikerjakan). Pemilik harus memutuskan sebelum menerima hasil */
+        post: operations["ajukanBiayaTambahan"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/csm/work-order/{id_work_order}/log": {
         parameters: {
             query?: never;
@@ -192,8 +243,25 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Penghuni mengonfirmasi perbaikan selesai. Selesai menutup tiket, menghitung komisi, dan menerbitkan invoice */
+        /** Penghuni mengonfirmasi perbaikan selesai (work order menunggu_pemilik) atau belum beres (kembali dikerjakan). Konfirmasi penghuni tidak menerbitkan invoice; invoice terbit saat pemilik menerima hasil */
         post: operations["setKonfirmasiSelesai"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/csm/work-order/{id_work_order}/terima": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Pemilik menerima hasil perbaikan (menutup tiket, menghitung komisi, menerbitkan invoice ke pemilik) atau meminta perbaikan ulang. Bisa dari menunggu_pemilik, atau dari menunggu_konfirmasi bila penghuni belum merespons. Ditolak (409) selama masih ada biaya tambahan yang belum diputuskan */
+        post: operations["setPenerimaanPemilik"];
         delete?: never;
         options?: never;
         head?: never;
@@ -209,7 +277,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Proses pembayaran via payment gateway, verifikasi, rekonsiliasi, catat ke laporan kas, kirim notifikasi lunas */
+        /** Pemilik membayar invoice via payment gateway, verifikasi, rekonsiliasi, catat ke laporan kas, kirim notifikasi lunas */
         post: operations["bayarInvoice"];
         delete?: never;
         options?: never;
@@ -251,6 +319,91 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/csm/invoice/bayar-sekaligus": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Pemilik membayar beberapa invoice perbaikan dalam satu transaksi payment gateway. Semua invoice harus milik pemilik dan belum lunas. Berhasil: semua lunas sekaligus (satu ref gateway); gagal: tidak ada yang lunas */
+        post: operations["bayarInvoiceSekaligus"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/rb/tagihan-sewa/terbitkan": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Pemilik menerbitkan tagihan sewa bulan berjalan untuk semua sewa aktif di propertinya yang belum ditagih (idempoten per sewa per periode), lalu penghuni dikabari */
+        post: operations["terbitkanTagihanSewa"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/rb/tagihan-sewa/{id_tagihan}/bayar": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Penghuni membayar tagihan sewa via payment gateway, rekonsiliasi, lalu dicatat sebagai pemasukan di laporan kas pemilik */
+        post: operations["bayarTagihanSewa"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/tagihan-sewa": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Daftar tagihan sewa (penghuni miliknya, pemilik propertinya) */
+        get: operations["listTagihanSewa"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/tagihan-sewa/{id_tagihan}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Tagihan Sewa beserta riwayat percobaan pembayaran */
+        get: operations["getTagihanSewa"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/invoice": {
         parameters: {
             query?: never;
@@ -258,7 +411,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Daftar invoice (penghuni miliknya, pemilik propertinya) */
+        /** Daftar invoice perbaikan yang ditagihkan ke pemilik (properti miliknya) */
         get: operations["listInvoice"];
         put?: never;
         post?: never;
@@ -292,7 +445,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Get Laporan Kas pemilik (pemasukan, pembayaran teknisi, komisi) */
+        /** Get Laporan Kas pemilik (pemasukan sewa, pengeluaran perbaikan, bagian teknisi, komisi) */
         get: operations["getLaporanKas"];
         put?: never;
         post?: never;
@@ -539,6 +692,8 @@ export interface components {
             kategori: components["schemas"]["Kategori"] | null;
             urgensi: components["schemas"]["Urgensi"] | null;
             perlu_review: boolean;
+            /** @description Cara tiket diselesaikan. null selama belum selesai */
+            penanganan: components["schemas"]["Penanganan"] | null;
             unit: components["schemas"]["UnitRingkas"];
             penghuni: components["schemas"]["Pengguna"];
             /** Format: date-time */
@@ -546,6 +701,8 @@ export interface components {
             /** Format: date-time */
             updated_at: string;
         };
+        /** @enum {string} */
+        Penanganan: "sendiri" | "teknisi";
         RiwayatStatus: {
             dari: components["schemas"]["StatusTiket"] | null;
             ke: components["schemas"]["StatusTiket"];
@@ -556,9 +713,15 @@ export interface components {
              * @example Pak Hendra
              */
             oleh: string;
+            /** @description Catatan pemilik saat menutup/membatalkan, atau alasan penghuni membuka ulang */
+            catatan: string | null;
         };
         TiketDetail: components["schemas"]["TiketRingkas"] & {
             keluhan: components["schemas"]["Keluhan"];
+            /** @description Catatan pemilik saat menangani sendiri */
+            catatan_penanganan: string | null;
+            /** @description Penghuni masih boleh membuka ulang (ditangani sendiri, ≤ 7 hari) */
+            bisa_dibuka_ulang: boolean;
             ai_confidence: number | null;
             ai_alasan: string | null;
             riwayat: components["schemas"]["RiwayatStatus"][];
@@ -584,10 +747,15 @@ export interface components {
             warning: string | null;
             trace: components["schemas"]["TraceStep"][];
         };
-        /** @description Tiket diproses lewat persetujuan estimasi biaya, jadi endpoint ini hanya untuk membatalkan. */
+        /** @description Tiket diproses lewat persetujuan estimasi biaya (pemilik memanggil teknisi). Endpoint ini dipakai pemilik untuk menutup tiket tanpa teknisi (selesai, hanya dari status diklasifikasi, tanpa biaya) atau membatalkannya. */
         UbahStatusRequest: {
             /** @enum {string} */
-            status: "dibatalkan";
+            status: "selesai" | "dibatalkan";
+            /** @description Alasan untuk penghuni */
+            catatan?: string;
+        };
+        BukaUlangRequest: {
+            alasan: string;
         };
         KlasifikasiRequest: {
             teks: string;
@@ -615,8 +783,11 @@ export interface components {
             /** Format: date-time */
             created_at: string;
         };
-        /** @enum {string} */
-        StatusWorkOrder: "menunggu_jadwal" | "dijadwalkan" | "dikerjakan" | "menunggu_konfirmasi" | "selesai" | "dibatalkan";
+        /**
+         * @description menunggu_pemilik = penghuni sudah mengonfirmasi beres, menunggu pemilik menerima hasil
+         * @enum {string}
+         */
+        StatusWorkOrder: "menunggu_jadwal" | "dijadwalkan" | "dikerjakan" | "menunggu_konfirmasi" | "menunggu_pemilik" | "selesai" | "dibatalkan";
         /** @enum {string} */
         MetodePembayaran: "qris" | "va_bca" | "va_mandiri" | "gopay";
         RincianBiaya: {
@@ -674,7 +845,7 @@ export interface components {
         };
         LogServis: {
             /** @enum {string} */
-            aktivitas: "dibuat" | "jadwal" | "tiba" | "mulai" | "catatan" | "bukti_valid" | "bukti_ditolak" | "belum_beres" | "selesai" | "dibatalkan";
+            aktivitas: "dibuat" | "jadwal" | "tiba" | "mulai" | "catatan" | "bukti_valid" | "bukti_ditolak" | "belum_beres" | "dikonfirmasi_penghuni" | "perbaikan_ulang" | "biaya_tambahan" | "biaya_tambahan_disetujui" | "biaya_tambahan_ditolak" | "selesai" | "dibatalkan";
             catatan: string | null;
             /** Format: date-time */
             waktu: string;
@@ -701,7 +872,9 @@ export interface components {
             penghuni: components["schemas"]["Pengguna"];
             teknisi: components["schemas"]["TeknisiRingkas"];
             status: components["schemas"]["StatusWorkOrder"];
+            /** @description Estimasi disetujui + biaya tambahan yang disetujui */
             biaya_final: number;
+            biaya_tambahan: components["schemas"]["BiayaTambahan"][];
             /** @description Usulan waktu kunjungan yang bisa dipilih penghuni */
             slot_jadwal: string[];
             /** Format: date-time */
@@ -715,6 +888,28 @@ export interface components {
             created_at: string;
             /** Format: date-time */
             updated_at: string;
+        };
+        BiayaTambahan: {
+            id: number;
+            /** @example Kabel di dalam dinding ikut terbakar, perlu diganti 3 meter */
+            alasan: string;
+            /** @description Rupiah */
+            jumlah: number;
+            /** @enum {string} */
+            status: "menunggu" | "disetujui" | "ditolak";
+            /** Format: date-time */
+            diajukan_at: string;
+            /** Format: date-time */
+            diputuskan_at: string | null;
+        };
+        BiayaTambahanRequest: {
+            alasan: string;
+            jumlah: number;
+        };
+        PenerimaanRequest: {
+            /** @description false = minta teknisi memperbaiki ulang */
+            diterima: boolean;
+            catatan?: string;
         };
         JadwalRequest: {
             /** Format: date-time */
@@ -768,7 +963,10 @@ export interface components {
             kode_tiket: string;
             judul: string;
             unit: components["schemas"]["UnitRingkas"];
+            /** @description Pelapor keluhan */
             penghuni: components["schemas"]["Pengguna"];
+            /** @description Yang ditagih dan membayar */
+            pemilik: components["schemas"]["Pengguna"];
             teknisi: string;
             rincian: components["schemas"]["RincianBiaya"][];
             /** @description Biaya final perbaikan */
@@ -777,10 +975,17 @@ export interface components {
             persen_komisi: number;
             /** @description Komisi Kosmos */
             komisi: number;
-            /** @description Yang dibayar penghuni */
+            /** @description Yang dibayar pemilik */
             total: number;
             /** @enum {string} */
             status: "belum_dibayar" | "lunas";
+            /** @description Belum dibayar dan sudah melewati jatuh tempo */
+            terlambat: boolean;
+            /**
+             * @description perbaikan = hasil diterima pemilik; kunjungan = tiket dibatalkan setelah teknisi tiba
+             * @enum {string}
+             */
+            jenis: "perbaikan" | "kunjungan";
             /** Format: date */
             jatuh_tempo: string;
             /** Format: date-time */
@@ -802,14 +1007,71 @@ export interface components {
             alasan: string | null;
             trace: components["schemas"]["TraceStep"][];
         };
+        BayarSekaligusRequest: {
+            id_invoice: number[];
+            metode: components["schemas"]["MetodePembayaran"];
+            /** @description Khusus demo */
+            simulasi_gagal?: boolean;
+        };
+        BayarSekaligusResponse: {
+            /** @enum {string} */
+            hasil: "berhasil" | "gagal";
+            invoice: components["schemas"]["Invoice"][];
+            /** @description Satu transaksi gateway untuk semua invoice */
+            ref_gateway: string;
+            total: number;
+            alasan: string | null;
+            trace: components["schemas"]["TraceStep"][];
+        };
+        TagihanSewa: {
+            id: number;
+            /** @example SWA-0012 */
+            kode: string;
+            /**
+             * @description Bulan sewa (YYYY-MM)
+             * @example 2026-11
+             */
+            periode: string;
+            unit: components["schemas"]["UnitRingkas"];
+            penghuni: components["schemas"]["Pengguna"];
+            /** @description Harga sewa bulanan unit (Rupiah) */
+            jumlah: number;
+            /** @enum {string} */
+            status: "belum_dibayar" | "lunas";
+            terlambat: boolean;
+            /** Format: date */
+            jatuh_tempo: string;
+            /** Format: date-time */
+            dibayar_at: string | null;
+            pembayaran: components["schemas"]["Pembayaran"][];
+            /** Format: date-time */
+            created_at: string;
+        };
+        TerbitkanSewaResponse: {
+            /** @example 2026-11 */
+            periode: string;
+            dibuat: components["schemas"]["TagihanSewa"][];
+            trace: components["schemas"]["TraceStep"][];
+        };
+        BayarSewaResponse: {
+            /** @enum {string} */
+            hasil: "berhasil" | "gagal";
+            tagihan: components["schemas"]["TagihanSewa"];
+            pembayaran: components["schemas"]["Pembayaran"];
+            alasan: string | null;
+            trace: components["schemas"]["TraceStep"][];
+        };
         TransaksiKas: {
             id: number;
             /** Format: date-time */
             waktu: string;
-            /** @enum {string} */
-            jenis: "pemasukan" | "pembayaran_teknisi" | "komisi";
+            /**
+             * @description sewa = pemasukan dari penghuni; pembayaran_teknisi dan komisi = pengeluaran perbaikan
+             * @enum {string}
+             */
+            jenis: "sewa" | "pembayaran_teknisi" | "komisi";
             keterangan: string;
-            /** @description Positif masuk */
+            /** @description Positif = uang masuk ke pemilik */
             jumlah: number;
             /** @example INV-0012 */
             ref: string;
@@ -817,11 +1079,20 @@ export interface components {
         };
         LaporanKas: {
             ringkasan: {
-                pemasukan: number;
+                /** @description Total sewa yang sudah dibayar penghuni */
+                pemasukan_sewa: number;
+                /** @description pemasukan_sewa - pengeluaran */
+                saldo: number;
+                /** @description Jumlah tagihan sewa belum dibayar */
+                sewa_tertunda: number;
+                nilai_sewa_tertunda: number;
+                /** @description Total biaya perbaikan yang sudah dibayar pemilik */
+                pengeluaran: number;
                 pembayaran_teknisi: number;
                 komisi: number;
                 invoice_lunas: number;
                 invoice_tertunda: number;
+                invoice_terlambat: number;
                 nilai_tertunda: number;
             };
             transaksi: components["schemas"]["TransaksiKas"][];
@@ -841,6 +1112,7 @@ export interface components {
     parameters: {
         IdTiket: number;
         IdWorkOrder: number;
+        IdTagihanSewa: number;
         IdInvoice: number;
     };
     requestBodies: never;
@@ -957,6 +1229,36 @@ export interface operations {
             403: components["responses"]["Error"];
             404: components["responses"]["Error"];
             409: components["responses"]["Error"];
+        };
+    };
+    bukaUlangTiket: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id_tiket: components["parameters"]["IdTiket"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BukaUlangRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TiketDetail"];
+                };
+            };
+            403: components["responses"]["Error"];
+            404: components["responses"]["Error"];
+            409: components["responses"]["Error"];
+            422: components["responses"]["Error"];
         };
     };
     klasifikasiUlang: {
@@ -1091,6 +1393,66 @@ export interface operations {
             422: components["responses"]["Error"];
         };
     };
+    setPersetujuanBiayaTambahan: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id_work_order: components["parameters"]["IdWorkOrder"];
+                id_tambahan: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PersetujuanRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkOrder"];
+                };
+            };
+            403: components["responses"]["Error"];
+            404: components["responses"]["Error"];
+            409: components["responses"]["Error"];
+        };
+    };
+    ajukanBiayaTambahan: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id_work_order: components["parameters"]["IdWorkOrder"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BiayaTambahanRequest"];
+            };
+        };
+        responses: {
+            /** @description Diajukan, menunggu persetujuan pemilik */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkOrder"];
+                };
+            };
+            403: components["responses"]["Error"];
+            404: components["responses"]["Error"];
+            409: components["responses"]["Error"];
+            422: components["responses"]["Error"];
+        };
+    };
     catatLogServis: {
         parameters: {
             query?: never;
@@ -1179,6 +1541,35 @@ export interface operations {
             409: components["responses"]["Error"];
         };
     };
+    setPenerimaanPemilik: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id_work_order: components["parameters"]["IdWorkOrder"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PenerimaanRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["KonfirmasiResponse"];
+                };
+            };
+            403: components["responses"]["Error"];
+            404: components["responses"]["Error"];
+            409: components["responses"]["Error"];
+        };
+    };
     bayarInvoice: {
         parameters: {
             query?: never;
@@ -1248,6 +1639,127 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["WorkOrder"];
+                };
+            };
+            404: components["responses"]["Error"];
+        };
+    };
+    bayarInvoiceSekaligus: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BayarSekaligusRequest"];
+            };
+        };
+        responses: {
+            /** @description Hasil pembayaran (berhasil atau gagal) */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BayarSekaligusResponse"];
+                };
+            };
+            403: components["responses"]["Error"];
+            404: components["responses"]["Error"];
+            409: components["responses"]["Error"];
+            422: components["responses"]["Error"];
+        };
+    };
+    terbitkanTagihanSewa: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Tagihan yang baru dibuat (bisa kosong bila semua sudah ditagih) */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TerbitkanSewaResponse"];
+                };
+            };
+            403: components["responses"]["Error"];
+        };
+    };
+    bayarTagihanSewa: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id_tagihan: components["parameters"]["IdTagihanSewa"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BayarRequest"];
+            };
+        };
+        responses: {
+            /** @description Hasil pembayaran (berhasil atau gagal) */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BayarSewaResponse"];
+                };
+            };
+            403: components["responses"]["Error"];
+            404: components["responses"]["Error"];
+            409: components["responses"]["Error"];
+        };
+    };
+    listTagihanSewa: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TagihanSewa"][];
+                };
+            };
+        };
+    };
+    getTagihanSewa: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id_tagihan: components["parameters"]["IdTagihanSewa"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TagihanSewa"];
                 };
             };
             404: components["responses"]["Error"];

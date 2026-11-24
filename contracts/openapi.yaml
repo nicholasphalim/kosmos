@@ -5,9 +5,9 @@ info:
   description: |
     Kontrak layanan SOAML untuk tiga proses bisnis Kosmos.
     Tag menunjukkan layer service hasil Deliverable 1:
-    Task (Handle Maintenance Request, Complete and Settle Maintenance),
+    Task (Handle Maintenance Request, Complete and Settle Maintenance, Rent Billing),
     Micro (Technician Matching, Cost Estimation, Evidence Verification, Commission Calculation),
-    Entity (Tenant and Lease, Complaint Ticket, Technician, Work Order, Invoice, Payment, Financial Ledger),
+    Entity (Tenant and Lease, Complaint Ticket, Technician, Work Order, Invoice, Rent Invoice, Payment, Financial Ledger),
     Utility (Media Storage, AI Classification, Notification).
     Microservice dipanggil in-process oleh Task, jadi tidak punya endpoint HTTP sendiri.
     Sumber kebenaran untuk tipe frontend (openapi-typescript) dan implementasi FastAPI.
@@ -19,10 +19,12 @@ tags:
   - name: Auth (demo)
   - name: "Task: Handle Maintenance Request"
   - name: "Task: Complete and Settle Maintenance"
+  - name: "Task: Rent Billing"
   - name: "Entity: Tenant and Lease"
   - name: "Entity: Complaint Ticket"
   - name: "Entity: Work Order"
   - name: "Entity: Invoice"
+  - name: "Entity: Rent Invoice"
   - name: "Entity: Financial Ledger"
   - name: "Utility: Media Storage"
   - name: "Utility: AI Classification"
@@ -95,7 +97,9 @@ paths:
     post:
       tags: ["Task: Handle Maintenance Request"]
       operationId: ubahStatusTiket
-      summary: Batalkan tiket (beserta work order yang berjalan) lalu kirim notifikasi ke penghuni dan pemilik
+      summary: >-
+        Pemilik menutup tiket tanpa teknisi (selesai) atau membatalkannya beserta work order yang berjalan. Bila teknisi
+        sudah tiba di lokasi, pembatalan menerbitkan invoice biaya kunjungan ke pemilik
       parameters:
         - $ref: "#/components/parameters/IdTiket"
       requestBody:
@@ -112,6 +116,31 @@ paths:
         "403": { $ref: "#/components/responses/Error" }
         "404": { $ref: "#/components/responses/Error" }
         "409": { $ref: "#/components/responses/Error" }
+
+  /hmr/tiket/{id_tiket}/buka-ulang:
+    post:
+      tags: ["Task: Handle Maintenance Request"]
+      operationId: bukaUlangTiket
+      summary: >-
+        Penghuni membuka ulang tiket yang ditutup pemilik tanpa teknisi (paling lama 7 hari setelah ditutup).
+        Tiket kembali ke status diklasifikasi dan pemilik dikabari.
+      parameters:
+        - $ref: "#/components/parameters/IdTiket"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/BukaUlangRequest" }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/TiketDetail" }
+        "403": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+        "409": { $ref: "#/components/responses/Error" }
+        "422": { $ref: "#/components/responses/Error" }
 
   /hmr/tiket/{id_tiket}/klasifikasi-ulang:
     post:
@@ -214,6 +243,55 @@ paths:
         "409": { $ref: "#/components/responses/Error" }
         "422": { $ref: "#/components/responses/Error" }
 
+  /hmr/work-order/{id_work_order}/biaya-tambahan/{id_tambahan}/persetujuan:
+    post:
+      tags: ["Task: Handle Maintenance Request"]
+      operationId: setPersetujuanBiayaTambahan
+      summary: Pemilik menyetujui atau menolak biaya tambahan yang diajukan teknisi. Disetujui menambah biaya final
+      parameters:
+        - $ref: "#/components/parameters/IdWorkOrder"
+        - name: id_tambahan
+          in: path
+          required: true
+          schema: { type: integer }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/PersetujuanRequest" }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/WorkOrder" }
+        "403": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+        "409": { $ref: "#/components/responses/Error" }
+
+  /csm/work-order/{id_work_order}/biaya-tambahan:
+    post:
+      tags: ["Task: Complete and Settle Maintenance"]
+      operationId: ajukanBiayaTambahan
+      summary: Teknisi mengajukan biaya tambahan di luar estimasi (saat dikerjakan). Pemilik harus memutuskan sebelum menerima hasil
+      parameters:
+        - $ref: "#/components/parameters/IdWorkOrder"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/BiayaTambahanRequest" }
+      responses:
+        "201":
+          description: Diajukan, menunggu persetujuan pemilik
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/WorkOrder" }
+        "403": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+        "409": { $ref: "#/components/responses/Error" }
+        "422": { $ref: "#/components/responses/Error" }
+
   /csm/work-order/{id_work_order}/log:
     post:
       tags: ["Task: Complete and Settle Maintenance"]
@@ -263,7 +341,9 @@ paths:
     post:
       tags: ["Task: Complete and Settle Maintenance"]
       operationId: setKonfirmasiSelesai
-      summary: Penghuni mengonfirmasi perbaikan selesai. Selesai menutup tiket, menghitung komisi, dan menerbitkan invoice
+      summary: >-
+        Penghuni mengonfirmasi perbaikan selesai (work order menunggu_pemilik) atau belum beres (kembali dikerjakan).
+        Konfirmasi penghuni tidak menerbitkan invoice; invoice terbit saat pemilik menerima hasil
       parameters:
         - $ref: "#/components/parameters/IdWorkOrder"
       requestBody:
@@ -281,11 +361,36 @@ paths:
         "404": { $ref: "#/components/responses/Error" }
         "409": { $ref: "#/components/responses/Error" }
 
+  /csm/work-order/{id_work_order}/terima:
+    post:
+      tags: ["Task: Complete and Settle Maintenance"]
+      operationId: setPenerimaanPemilik
+      summary: >-
+        Pemilik menerima hasil perbaikan (menutup tiket, menghitung komisi, menerbitkan invoice ke pemilik) atau meminta
+        perbaikan ulang. Bisa dari menunggu_pemilik, atau dari menunggu_konfirmasi bila penghuni belum merespons.
+        Ditolak (409) selama masih ada biaya tambahan yang belum diputuskan
+      parameters:
+        - $ref: "#/components/parameters/IdWorkOrder"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/PenerimaanRequest" }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/KonfirmasiResponse" }
+        "403": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+        "409": { $ref: "#/components/responses/Error" }
+
   /csm/invoice/{id_invoice}/bayar:
     post:
       tags: ["Task: Complete and Settle Maintenance"]
       operationId: bayarInvoice
-      summary: Proses pembayaran via payment gateway, verifikasi, rekonsiliasi, catat ke laporan kas, kirim notifikasi lunas
+      summary: Pemilik membayar invoice via payment gateway, verifikasi, rekonsiliasi, catat ke laporan kas, kirim notifikasi lunas
       parameters:
         - $ref: "#/components/parameters/IdInvoice"
       requestBody:
@@ -337,11 +442,100 @@ paths:
               schema: { $ref: "#/components/schemas/WorkOrder" }
         "404": { $ref: "#/components/responses/Error" }
 
+  /csm/invoice/bayar-sekaligus:
+    post:
+      tags: ["Task: Complete and Settle Maintenance"]
+      operationId: bayarInvoiceSekaligus
+      summary: >-
+        Pemilik membayar beberapa invoice perbaikan dalam satu transaksi payment gateway. Semua invoice harus milik
+        pemilik dan belum lunas. Berhasil: semua lunas sekaligus (satu ref gateway); gagal: tidak ada yang lunas
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/BayarSekaligusRequest" }
+      responses:
+        "200":
+          description: Hasil pembayaran (berhasil atau gagal)
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/BayarSekaligusResponse" }
+        "403": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+        "409": { $ref: "#/components/responses/Error" }
+        "422": { $ref: "#/components/responses/Error" }
+
+  /rb/tagihan-sewa/terbitkan:
+    post:
+      tags: ["Task: Rent Billing"]
+      operationId: terbitkanTagihanSewa
+      summary: >-
+        Pemilik menerbitkan tagihan sewa bulan berjalan untuk semua sewa aktif di propertinya yang belum ditagih
+        (idempoten per sewa per periode), lalu penghuni dikabari
+      responses:
+        "201":
+          description: Tagihan yang baru dibuat (bisa kosong bila semua sudah ditagih)
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/TerbitkanSewaResponse" }
+        "403": { $ref: "#/components/responses/Error" }
+
+  /rb/tagihan-sewa/{id_tagihan}/bayar:
+    post:
+      tags: ["Task: Rent Billing"]
+      operationId: bayarTagihanSewa
+      summary: Penghuni membayar tagihan sewa via payment gateway, rekonsiliasi, lalu dicatat sebagai pemasukan di laporan kas pemilik
+      parameters:
+        - $ref: "#/components/parameters/IdTagihanSewa"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/BayarRequest" }
+      responses:
+        "200":
+          description: Hasil pembayaran (berhasil atau gagal)
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/BayarSewaResponse" }
+        "403": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+        "409": { $ref: "#/components/responses/Error" }
+
+  /tagihan-sewa:
+    get:
+      tags: ["Entity: Rent Invoice"]
+      operationId: listTagihanSewa
+      summary: Daftar tagihan sewa (penghuni miliknya, pemilik propertinya)
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/TagihanSewa" }
+
+  /tagihan-sewa/{id_tagihan}:
+    get:
+      tags: ["Entity: Rent Invoice"]
+      operationId: getTagihanSewa
+      summary: Get Tagihan Sewa beserta riwayat percobaan pembayaran
+      parameters:
+        - $ref: "#/components/parameters/IdTagihanSewa"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/TagihanSewa" }
+        "404": { $ref: "#/components/responses/Error" }
+
   /invoice:
     get:
       tags: ["Entity: Invoice"]
       operationId: listInvoice
-      summary: Daftar invoice (penghuni miliknya, pemilik propertinya)
+      summary: Daftar invoice perbaikan yang ditagihkan ke pemilik (properti miliknya)
       responses:
         "200":
           description: OK
@@ -370,7 +564,7 @@ paths:
     get:
       tags: ["Entity: Financial Ledger"]
       operationId: getLaporanKas
-      summary: Get Laporan Kas pemilik (pemasukan, pembayaran teknisi, komisi)
+      summary: Get Laporan Kas pemilik (pemasukan sewa, pengeluaran perbaikan, bagian teknisi, komisi)
       responses:
         "200":
           description: OK
@@ -529,6 +723,11 @@ components:
       in: path
       required: true
       schema: { type: integer }
+    IdTagihanSewa:
+      name: id_tagihan
+      in: path
+      required: true
+      schema: { type: integer }
     IdInvoice:
       name: id_invoice
       in: path
@@ -669,7 +868,7 @@ components:
 
     TiketRingkas:
       type: object
-      required: [id, kode, judul, status, kategori, urgensi, perlu_review, unit, penghuni, created_at, updated_at]
+      required: [id, kode, judul, status, kategori, urgensi, perlu_review, penanganan, unit, penghuni, created_at, updated_at]
       properties:
         id: { type: integer }
         kode: { type: string, examples: [TKT-0055] }
@@ -684,14 +883,23 @@ components:
             - $ref: "#/components/schemas/Urgensi"
             - type: "null"
         perlu_review: { type: boolean }
+        penanganan:
+          description: Cara tiket diselesaikan. null selama belum selesai
+          oneOf:
+            - $ref: "#/components/schemas/Penanganan"
+            - type: "null"
         unit: { $ref: "#/components/schemas/UnitRingkas" }
         penghuni: { $ref: "#/components/schemas/Pengguna" }
         created_at: { type: string, format: date-time }
         updated_at: { type: string, format: date-time }
 
+    Penanganan:
+      type: string
+      enum: [sendiri, teknisi]
+
     RiwayatStatus:
       type: object
-      required: [dari, ke, waktu, oleh]
+      required: [dari, ke, waktu, oleh, catatan]
       properties:
         dari:
           oneOf:
@@ -700,14 +908,17 @@ components:
         ke: { $ref: "#/components/schemas/StatusTiket" }
         waktu: { type: string, format: date-time }
         oleh: { type: string, examples: [sistem, Pak Hendra] }
+        catatan: { type: [string, "null"], description: "Catatan pemilik saat menutup/membatalkan, atau alasan penghuni membuka ulang" }
 
     TiketDetail:
       allOf:
         - $ref: "#/components/schemas/TiketRingkas"
         - type: object
-          required: [keluhan, ai_confidence, ai_alasan, riwayat]
+          required: [keluhan, ai_confidence, ai_alasan, riwayat, catatan_penanganan, bisa_dibuka_ulang]
           properties:
             keluhan: { $ref: "#/components/schemas/Keluhan" }
+            catatan_penanganan: { type: [string, "null"], description: Catatan pemilik saat menangani sendiri }
+            bisa_dibuka_ulang: { type: boolean, description: "Penghuni masih boleh membuka ulang (ditangani sendiri, ≤ 7 hari)" }
             ai_confidence: { type: [number, "null"], minimum: 0, maximum: 1 }
             ai_alasan: { type: [string, "null"] }
             riwayat:
@@ -748,12 +959,21 @@ components:
 
     UbahStatusRequest:
       type: object
-      description: Tiket diproses lewat persetujuan estimasi biaya, jadi endpoint ini hanya untuk membatalkan.
+      description: >-
+        Tiket diproses lewat persetujuan estimasi biaya (pemilik memanggil teknisi). Endpoint ini dipakai pemilik
+        untuk menutup tiket tanpa teknisi (selesai, hanya dari status diklasifikasi, tanpa biaya) atau membatalkannya.
       required: [status]
       properties:
         status:
           type: string
-          enum: [dibatalkan]
+          enum: [selesai, dibatalkan]
+        catatan: { type: string, maxLength: 300, description: Alasan untuk penghuni, mis. sudah ditangani sendiri }
+
+    BukaUlangRequest:
+      type: object
+      required: [alasan]
+      properties:
+        alasan: { type: string, minLength: 5, maxLength: 300 }
 
     KlasifikasiRequest:
       type: object
@@ -810,7 +1030,8 @@ components:
 
     StatusWorkOrder:
       type: string
-      enum: [menunggu_jadwal, dijadwalkan, dikerjakan, menunggu_konfirmasi, selesai, dibatalkan]
+      description: menunggu_pemilik = penghuni sudah mengonfirmasi beres, menunggu pemilik menerima hasil
+      enum: [menunggu_jadwal, dijadwalkan, dikerjakan, menunggu_konfirmasi, menunggu_pemilik, selesai, dibatalkan]
     MetodePembayaran:
       type: string
       enum: [qris, va_bca, va_mandiri, gopay]
@@ -904,7 +1125,22 @@ components:
       properties:
         aktivitas:
           type: string
-          enum: [dibuat, jadwal, tiba, mulai, catatan, bukti_valid, bukti_ditolak, belum_beres, selesai, dibatalkan]
+          enum:
+            - dibuat
+            - jadwal
+            - tiba
+            - mulai
+            - catatan
+            - bukti_valid
+            - bukti_ditolak
+            - belum_beres
+            - dikonfirmasi_penghuni
+            - perbaikan_ulang
+            - biaya_tambahan
+            - biaya_tambahan_disetujui
+            - biaya_tambahan_ditolak
+            - selesai
+            - dibatalkan
         catatan: { type: [string, "null"] }
         waktu: { type: string, format: date-time }
         oleh: { type: string }
@@ -926,7 +1162,7 @@ components:
 
     WorkOrder:
       type: object
-      required: [id, kode, id_tiket, kode_tiket, judul, kategori, urgensi, unit, penghuni, teknisi, status, biaya_final, slot_jadwal, jadwal_kunjungan, log, bukti_sebelum, bukti_sesudah, verifikasi, id_invoice, created_at, updated_at]
+      required: [id, kode, id_tiket, kode_tiket, judul, kategori, urgensi, unit, penghuni, teknisi, status, biaya_final, biaya_tambahan, slot_jadwal, jadwal_kunjungan, log, bukti_sebelum, bukti_sesudah, verifikasi, id_invoice, created_at, updated_at]
       properties:
         id: { type: integer }
         kode: { type: string, examples: [WO-0012] }
@@ -945,7 +1181,10 @@ components:
         penghuni: { $ref: "#/components/schemas/Pengguna" }
         teknisi: { $ref: "#/components/schemas/TeknisiRingkas" }
         status: { $ref: "#/components/schemas/StatusWorkOrder" }
-        biaya_final: { type: integer }
+        biaya_final: { type: integer, description: Estimasi disetujui + biaya tambahan yang disetujui }
+        biaya_tambahan:
+          type: array
+          items: { $ref: "#/components/schemas/BiayaTambahan" }
         slot_jadwal:
           type: array
           description: Usulan waktu kunjungan yang bisa dipilih penghuni
@@ -969,6 +1208,33 @@ components:
         id_invoice: { type: [integer, "null"] }
         created_at: { type: string, format: date-time }
         updated_at: { type: string, format: date-time }
+
+    BiayaTambahan:
+      type: object
+      required: [id, alasan, jumlah, status, diajukan_at, diputuskan_at]
+      properties:
+        id: { type: integer }
+        alasan: { type: string, examples: ["Kabel di dalam dinding ikut terbakar, perlu diganti 3 meter"] }
+        jumlah: { type: integer, description: Rupiah }
+        status:
+          type: string
+          enum: [menunggu, disetujui, ditolak]
+        diajukan_at: { type: string, format: date-time }
+        diputuskan_at: { type: [string, "null"], format: date-time }
+
+    BiayaTambahanRequest:
+      type: object
+      required: [alasan, jumlah]
+      properties:
+        alasan: { type: string, minLength: 5, maxLength: 200 }
+        jumlah: { type: integer, minimum: 1000, maximum: 5000000 }
+
+    PenerimaanRequest:
+      type: object
+      required: [diterima]
+      properties:
+        diterima: { type: boolean, description: false = minta teknisi memperbaiki ulang }
+        catatan: { type: string, maxLength: 300 }
 
     JadwalRequest:
       type: object
@@ -1040,7 +1306,7 @@ components:
 
     Invoice:
       type: object
-      required: [id, kode, id_work_order, id_tiket, kode_tiket, judul, unit, penghuni, teknisi, rincian, biaya, persen_komisi, komisi, total, status, jatuh_tempo, dibayar_at, pembayaran, created_at]
+      required: [id, kode, id_work_order, id_tiket, kode_tiket, judul, unit, penghuni, pemilik, teknisi, rincian, biaya, persen_komisi, komisi, total, status, terlambat, jenis, jatuh_tempo, dibayar_at, pembayaran, created_at]
       properties:
         id: { type: integer }
         kode: { type: string, examples: [INV-0012] }
@@ -1049,7 +1315,8 @@ components:
         kode_tiket: { type: string }
         judul: { type: string }
         unit: { $ref: "#/components/schemas/UnitRingkas" }
-        penghuni: { $ref: "#/components/schemas/Pengguna" }
+        penghuni: { $ref: "#/components/schemas/Pengguna", description: Pelapor keluhan }
+        pemilik: { $ref: "#/components/schemas/Pengguna", description: Yang ditagih dan membayar }
         teknisi: { type: string }
         rincian:
           type: array
@@ -1057,10 +1324,15 @@ components:
         biaya: { type: integer, description: Biaya final perbaikan }
         persen_komisi: { type: number, examples: [10] }
         komisi: { type: integer, description: Komisi Kosmos, dipotong dari bagian teknisi }
-        total: { type: integer, description: Yang dibayar penghuni }
+        total: { type: integer, description: Yang dibayar pemilik }
         status:
           type: string
           enum: [belum_dibayar, lunas]
+        terlambat: { type: boolean, description: Belum dibayar dan sudah melewati jatuh tempo }
+        jenis:
+          type: string
+          description: perbaikan = hasil diterima pemilik; kunjungan = tiket dibatalkan setelah teknisi tiba
+          enum: [perbaikan, kunjungan]
         jatuh_tempo: { type: string, format: date }
         dibayar_at: { type: [string, "null"], format: date-time }
         pembayaran:
@@ -1089,6 +1361,82 @@ components:
           type: array
           items: { $ref: "#/components/schemas/TraceStep" }
 
+    BayarSekaligusRequest:
+      type: object
+      required: [id_invoice, metode]
+      properties:
+        id_invoice:
+          type: array
+          minItems: 1
+          maxItems: 20
+          items: { type: integer }
+        metode: { $ref: "#/components/schemas/MetodePembayaran" }
+        simulasi_gagal: { type: boolean, description: Khusus demo, payment gateway mock menolak transaksi }
+
+    BayarSekaligusResponse:
+      type: object
+      required: [hasil, invoice, ref_gateway, total, alasan, trace]
+      properties:
+        hasil:
+          type: string
+          enum: [berhasil, gagal]
+        invoice:
+          type: array
+          items: { $ref: "#/components/schemas/Invoice" }
+        ref_gateway: { type: string, description: Satu transaksi gateway untuk semua invoice }
+        total: { type: integer }
+        alasan: { type: [string, "null"] }
+        trace:
+          type: array
+          items: { $ref: "#/components/schemas/TraceStep" }
+
+    TagihanSewa:
+      type: object
+      required: [id, kode, periode, unit, penghuni, jumlah, status, terlambat, jatuh_tempo, dibayar_at, pembayaran, created_at]
+      properties:
+        id: { type: integer }
+        kode: { type: string, examples: [SWA-0012] }
+        periode: { type: string, pattern: "^\\d{4}-\\d{2}$", examples: ["2026-11"], description: Bulan sewa (YYYY-MM) }
+        unit: { $ref: "#/components/schemas/UnitRingkas" }
+        penghuni: { $ref: "#/components/schemas/Pengguna" }
+        jumlah: { type: integer, description: Harga sewa bulanan unit (Rupiah) }
+        status:
+          type: string
+          enum: [belum_dibayar, lunas]
+        terlambat: { type: boolean }
+        jatuh_tempo: { type: string, format: date }
+        dibayar_at: { type: [string, "null"], format: date-time }
+        pembayaran:
+          type: array
+          items: { $ref: "#/components/schemas/Pembayaran" }
+        created_at: { type: string, format: date-time }
+
+    TerbitkanSewaResponse:
+      type: object
+      required: [periode, dibuat, trace]
+      properties:
+        periode: { type: string, examples: ["2026-11"] }
+        dibuat:
+          type: array
+          items: { $ref: "#/components/schemas/TagihanSewa" }
+        trace:
+          type: array
+          items: { $ref: "#/components/schemas/TraceStep" }
+
+    BayarSewaResponse:
+      type: object
+      required: [hasil, tagihan, pembayaran, alasan, trace]
+      properties:
+        hasil:
+          type: string
+          enum: [berhasil, gagal]
+        tagihan: { $ref: "#/components/schemas/TagihanSewa" }
+        pembayaran: { $ref: "#/components/schemas/Pembayaran" }
+        alasan: { type: [string, "null"] }
+        trace:
+          type: array
+          items: { $ref: "#/components/schemas/TraceStep" }
+
     TransaksiKas:
       type: object
       required: [id, waktu, jenis, keterangan, jumlah, ref, properti]
@@ -1097,9 +1445,10 @@ components:
         waktu: { type: string, format: date-time }
         jenis:
           type: string
-          enum: [pemasukan, pembayaran_teknisi, komisi]
+          description: sewa = pemasukan dari penghuni; pembayaran_teknisi dan komisi = pengeluaran perbaikan
+          enum: [sewa, pembayaran_teknisi, komisi]
         keterangan: { type: string }
-        jumlah: { type: integer, description: Positif masuk, negatif keluar }
+        jumlah: { type: integer, description: Positif = uang masuk ke pemilik, negatif = uang keluar }
         ref: { type: string, examples: [INV-0012] }
         properti: { type: string }
 
@@ -1109,13 +1458,29 @@ components:
       properties:
         ringkasan:
           type: object
-          required: [pemasukan, pembayaran_teknisi, komisi, invoice_lunas, invoice_tertunda, nilai_tertunda]
+          required:
+            - pemasukan_sewa
+            - pengeluaran
+            - saldo
+            - pembayaran_teknisi
+            - komisi
+            - invoice_lunas
+            - invoice_tertunda
+            - invoice_terlambat
+            - nilai_tertunda
+            - sewa_tertunda
+            - nilai_sewa_tertunda
           properties:
-            pemasukan: { type: integer }
+            pemasukan_sewa: { type: integer, description: Total sewa yang sudah dibayar penghuni }
+            saldo: { type: integer, description: pemasukan_sewa - pengeluaran }
+            sewa_tertunda: { type: integer, description: Jumlah tagihan sewa belum dibayar }
+            nilai_sewa_tertunda: { type: integer }
+            pengeluaran: { type: integer, description: Total biaya perbaikan yang sudah dibayar pemilik }
             pembayaran_teknisi: { type: integer }
             komisi: { type: integer }
             invoice_lunas: { type: integer }
             invoice_tertunda: { type: integer }
+            invoice_terlambat: { type: integer }
             nilai_tertunda: { type: integer }
         transaksi:
           type: array

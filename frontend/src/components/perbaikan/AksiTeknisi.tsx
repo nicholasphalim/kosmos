@@ -5,10 +5,10 @@ import { Camera, Check, House, MessageCircle, Send, ShieldCheck, Wrench, X } fro
 import { useEffect, useId, useMemo, useState } from "react";
 import { validasiFile } from "@/components/keluhan/MediaPicker";
 import { Button } from "@/components/ui/Button";
-import { useCatatLog, useUnggahBukti } from "@/lib/api/hooks";
+import { useAjukanBiayaTambahan, useCatatLog, useUnggahBukti } from "@/lib/api/hooks";
 import type { WorkOrder } from "@/lib/api/types";
 import { jadwal, rupiah } from "@/lib/format";
-import { HasilVerifikasi, SubJudul } from "./Bagian";
+import { DaftarBiayaTambahan, HasilVerifikasi, SubJudul } from "./Bagian";
 
 function FotoSlot({ label, file, onChange, onError }: { label: string; file: File | null; onChange: (f: File | null) => void; onError: (p: string | null) => void }) {
   const id = useId();
@@ -134,10 +134,74 @@ function FormCatatan({ wo }: { wo: WorkOrder }) {
   );
 }
 
-/** Aksi teknisi sesuai status work order (Add Log Servis, unggah bukti). */
+/** Teknisi mengajukan biaya di luar estimasi; pemilik memutuskan. */
+function FormBiayaTambahan({ wo }: { wo: WorkOrder }) {
+  const ajukan = useAjukanBiayaTambahan();
+  const [alasan, setAlasan] = useState("");
+  const [jumlah, setJumlah] = useState("");
+  const menunggu = wo.biaya_tambahan.some((b) => b.status === "menunggu");
+  const nilai = Number(jumlah.replace(/\D/g, ""));
+
+  return (
+    <details className="rounded-2xl border border-line-soft px-4.5 py-3.5">
+      <summary className="cursor-pointer text-[15px] font-bold">Biaya tambahan di luar estimasi</summary>
+      <div className="mt-3 flex flex-col gap-3">
+        <DaftarBiayaTambahan wo={wo} />
+        {menunggu ? (
+          <p className="text-sm text-navy-soft">Menunggu keputusan pemilik. Kamu tetap bisa melanjutkan pekerjaan sesuai estimasi.</p>
+        ) : (
+          <form
+            className="flex flex-col gap-3"
+            onSubmit={(e) => {
+              e.preventDefault();
+              ajukan.mutate({ idWo: wo.id, alasan, jumlah: nilai }, { onSuccess: () => (setAlasan(""), setJumlah("")) });
+            }}
+          >
+            <p className="text-[13px] text-muted">Ajukan hanya bila ada kerusakan lain yang ditemukan. Pemilik harus menyetujuinya sebelum ditagihkan.</p>
+            <label htmlFor="alasan-tambahan" className="text-sm font-bold">
+              Alasan
+            </label>
+            <input
+              id="alasan-tambahan"
+              value={alasan}
+              onChange={(e) => setAlasan(e.target.value)}
+              maxLength={200}
+              placeholder="Contoh: kabel dalam dinding ikut terbakar, ganti 3 meter"
+              className="h-11 rounded-full border border-line-strong bg-white px-4 text-[15px] focus:border-violet-400 focus:shadow-[0_0_0_4px_#8a6ff029] focus:outline-none"
+            />
+            <label htmlFor="jumlah-tambahan" className="text-sm font-bold">
+              Jumlah (Rp)
+            </label>
+            <input
+              id="jumlah-tambahan"
+              inputMode="numeric"
+              value={jumlah}
+              onChange={(e) => setJumlah(e.target.value)}
+              placeholder="75000"
+              className="h-11 rounded-full border border-line-strong bg-white px-4 font-mono text-[15px] focus:border-violet-400 focus:shadow-[0_0_0_4px_#8a6ff029] focus:outline-none"
+            />
+            <Button type="submit" variant="outline" loading={ajukan.isPending} disabled={alasan.trim().length < 5 || nilai < 1000} className="self-start">
+              Ajukan {nilai >= 1000 ? rupiah(nilai) : "biaya tambahan"}
+            </Button>
+          </form>
+        )}
+        {ajukan.error && (
+          <p role="alert" className="text-sm font-semibold text-danger">
+            {ajukan.error.message}
+          </p>
+        )}
+      </div>
+    </details>
+  );
+}
+
+/** Aksi teknisi sesuai status work order (Add Log Servis, unggah bukti, biaya tambahan). */
 export function AksiTeknisi({ wo }: { wo: WorkOrder }) {
   const log = useCatatLog();
   const sudahMulai = wo.log.some((l) => l.aktivitas === "mulai");
+  // Keberatan terakhir (penghuni belum beres / pemilik minta ulang) yang belum dijawab bukti baru.
+  const terakhir = wo.log.findLast((l) => !["catatan", "biaya_tambahan", "biaya_tambahan_disetujui", "biaya_tambahan_ditolak"].includes(l.aktivitas));
+  const keberatan = terakhir && (terakhir.aktivitas === "belum_beres" || terakhir.aktivitas === "perbaikan_ulang") ? terakhir : null;
   const sedang = log.isPending ? log.variables.aktivitas : null;
 
   if (wo.status === "menunggu_jadwal") {
@@ -176,12 +240,14 @@ export function AksiTeknisi({ wo }: { wo: WorkOrder }) {
             {log.error && <p className="text-sm font-semibold text-danger">{log.error.message}</p>}
           </div>
         )}
-        {wo.log.at(-1)?.aktivitas === "belum_beres" && (
+        {keberatan && (
           <p role="alert" className="rounded-2xl bg-warn-bg px-4.5 py-3.5 text-sm font-semibold text-warn">
-            Penghuni menandai belum beres{wo.log.at(-1)?.catatan ? `: “${wo.log.at(-1)?.catatan}”` : "."} Perbaiki lalu unggah bukti baru.
+            {keberatan.aktivitas === "perbaikan_ulang" ? "Pemilik meminta perbaikan ulang" : "Penghuni menandai belum beres"}
+            {keberatan.catatan ? `: “${keberatan.catatan}”` : "."} Perbaiki lalu unggah bukti baru.
           </p>
         )}
         <FormCatatan wo={wo} />
+        <FormBiayaTambahan wo={wo} />
         <div className={clsx("border-t border-line-soft pt-6", !sudahMulai && "opacity-60")}>
           <FormBukti wo={wo} />
         </div>
@@ -198,14 +264,28 @@ export function AksiTeknisi({ wo }: { wo: WorkOrder }) {
     );
   }
 
-  if (wo.status === "selesai") {
+  if (wo.status === "menunggu_pemilik") {
     return (
-      <p className="flex items-center gap-3 rounded-[22px] bg-ok-bg px-4.5 py-4 text-[15px] font-semibold text-ok">
-        <Check className="size-6 shrink-0" aria-hidden />
-        Selesai. Pembayaran {rupiah(wo.biaya_final)} diteruskan ke kamu setelah penghuni membayar, dipotong komisi Kosmos.
+      <p className="flex items-center gap-3 rounded-[22px] bg-info-bg px-4.5 py-4 text-[15px] font-semibold text-info">
+        <ShieldCheck className="size-6 shrink-0" aria-hidden />
+        {wo.penghuni.nama} sudah mengonfirmasi beres. Menunggu pemilik menerima hasil.
       </p>
     );
   }
 
-  return <p className="text-[15px] text-navy-soft">Work order ini dibatalkan.</p>;
+  if (wo.status === "selesai") {
+    return (
+      <p className="flex items-center gap-3 rounded-[22px] bg-ok-bg px-4.5 py-4 text-[15px] font-semibold text-ok">
+        <Check className="size-6 shrink-0" aria-hidden />
+        Selesai. Pembayaran {rupiah(wo.biaya_final)} diteruskan ke kamu setelah pemilik membayar tagihan, dipotong komisi Kosmos.
+      </p>
+    );
+  }
+
+  const bayarKunjungan = wo.id_invoice !== null;
+  return (
+    <p className="text-[15px] text-navy-soft">
+      Work order ini dibatalkan.{bayarKunjungan ? " Karena kamu sudah datang, biaya kunjungan tetap ditagihkan ke pemilik." : ""}
+    </p>
+  );
 }

@@ -11,7 +11,7 @@ import type { WorkOrder } from "@/lib/api/types";
 import { jadwal, rupiah } from "@/lib/format";
 import { useSession } from "@/lib/session";
 
-const AKTIF: WorkOrder["status"][] = ["menunggu_jadwal", "dijadwalkan", "dikerjakan", "menunggu_konfirmasi"];
+const AKTIF: WorkOrder["status"][] = ["menunggu_jadwal", "dijadwalkan", "dikerjakan", "menunggu_konfirmasi", "menunggu_pemilik"];
 
 function Daftar({ judul, items }: { judul: string; items: WorkOrder[] }) {
   return (
@@ -78,7 +78,7 @@ export default function TeknisiPage() {
         <dl className="relative grid w-full max-w-[640px] grid-cols-3 gap-2 sm:gap-3">
           {[
             { label: "Perlu dikerjakan", nilai: semua.filter((w) => w.status === "dijadwalkan" || w.status === "dikerjakan").length },
-            { label: "Menunggu penghuni", nilai: semua.filter((w) => w.status === "menunggu_jadwal" || w.status === "menunggu_konfirmasi").length },
+            { label: "Menunggu penghuni/pemilik", nilai: semua.filter((w) => ["menunggu_jadwal", "menunggu_konfirmasi", "menunggu_pemilik"].includes(w.status)).length },
             { label: "Selesai", nilai: semua.filter((w) => w.status === "selesai").length },
           ].map((s) => (
             <div key={s.label} className="flex flex-col gap-1 rounded-[20px] border border-white/15 bg-white/10 p-3.5 backdrop-blur sm:p-4">

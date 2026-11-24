@@ -3,7 +3,9 @@ import { defineConfig, devices } from "@playwright/test";
 /** E2E skenario demo di mode mock (plan §8, §11). Jalankan: npm run test:e2e */
 export default defineConfig({
   testDir: "./e2e",
-  timeout: 60_000,
+  // Alur multi-peran (pemilik → penghuni → teknisi → pemilik) butuh banyak login; mesin lambat perlu ruang.
+  timeout: 240_000,
+  expect: { timeout: 15_000 },
   fullyParallel: false,
   // Satu worker: tes "reset lewat terminal" memakai sinyal global yang menghapus sesi di semua tab.
   workers: 1,

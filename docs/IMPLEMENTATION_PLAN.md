@@ -403,19 +403,29 @@ Dua proses lanjutan sudah diprototype di frontend mode mock dengan pola yang sam
 
 | Layer | Service | Operasi (D1) | Endpoint |
 |---|---|---|---|
-| Task | Handle Maintenance Request | Get Estimasi Biaya, Set Persetujuan Biaya, Set Jadwal Kunjungan | `GET/POST /hmr/tiket/{id}/estimasi`, `POST /hmr/estimasi/{id}/persetujuan`, `POST /hmr/work-order/{id}/jadwal` |
-| Task | Complete and Settle Maintenance | Add Log Servis, unggah bukti, Set Konfirmasi Selesai, bayar | `POST /csm/work-order/{id}/log`, `/bukti`, `/konfirmasi`, `POST /csm/invoice/{id}/bayar` |
+| Task | Handle Maintenance Request | Get Estimasi Biaya, Set Persetujuan Biaya, Set Persetujuan Biaya Tambahan, Set Jadwal Kunjungan, buka ulang tiket | `GET/POST /hmr/tiket/{id}/estimasi`, `POST /hmr/estimasi/{id}/persetujuan`, `POST /hmr/work-order/{id}/biaya-tambahan/{id}/persetujuan`, `POST /hmr/work-order/{id}/jadwal`, `POST /hmr/tiket/{id}/buka-ulang` |
+| Task | Complete and Settle Maintenance | Add Log Servis, ajukan biaya tambahan, unggah bukti, Set Konfirmasi Selesai (penghuni), Set Penerimaan Pemilik, bayar | `POST /csm/work-order/{id}/log`, `/biaya-tambahan`, `/bukti`, `/konfirmasi`, `/terima`, `POST /csm/invoice/{id}/bayar` |
+| Task | Rent Billing (baru) | Terbitkan Tagihan Sewa, bayar sewa | `POST /rb/tagihan-sewa/terbitkan`, `POST /rb/tagihan-sewa/{id}/bayar` |
 | Micro | Technician Matching, Cost Estimation, Evidence Verification, Commission Calculation | Match Teknisi, Estimate Biaya, Verify Bukti, Calculate Komisi | Tanpa endpoint (dipanggil in-process oleh Task), `frontend/src/mocks/micro.ts` |
-| Entity | Technician, Work Order, Invoice, Payment, Financial Ledger | Get Teknisi Tersedia, Add Work Order, Add Invoice, Process Payment, Add Transaksi Kas, dst. | `GET /work-order`, `GET /invoice`, `GET /laporan-kas` |
+| Entity | Technician, Work Order, Invoice, Rent Invoice, Payment, Financial Ledger | Get Teknisi Tersedia, Add Work Order, Add Invoice, Add Tagihan Sewa, Process Payment, Add Transaksi Kas, dst. | `GET /work-order`, `GET /invoice`, `GET /tagihan-sewa`, `GET /laporan-kas`, `POST /csm/invoice/bayar-sekaligus` |
 
 Keputusan desain yang perlu disepakati kelompok:
-1. **Tiket diproses lewat persetujuan estimasi.** Tombol "Tandai diproses" dihapus. `POST /hmr/tiket/{id}/status` kini hanya menerima `dibatalkan`, dan pembatalan ikut membatalkan work order yang berjalan.
+1. **Pemilik menilai tiket dulu, baru memanggil teknisi.** Tiket yang sudah diklasifikasi tidak otomatis dicarikan teknisi. Pemilik memilih "Panggil teknisi" (cari teknisi + estimasi, tiket diproses setelah estimasi disetujui) atau "Tidak perlu teknisi" (tiket langsung `selesai`, tanpa work order dan tanpa tagihan). Tombol "Tandai diproses" dihapus. `POST /hmr/tiket/{id}/status` menerima `selesai` (hanya dari `diklasifikasi`) dan `dibatalkan` (ikut membatalkan work order yang berjalan), dengan `catatan` opsional untuk penghuni. Catatan disimpan di riwayat tiket dan `catatan_penanganan`; field `penanganan` (`sendiri | teknisi`) membedakan dua jenis tiket selesai.
+   - **Tolak estimasi tidak membatalkan tiket.** Tiket tetap `diklasifikasi`; pemilik bisa mencari teknisi lain (teknisi yang estimasinya ditolak dikecualikan Technician Matching) atau menangani sendiri.
+   - **Penghuni bisa membuka ulang** tiket yang ditangani sendiri, paling lama 7 hari setelah ditutup, dengan alasan. Transisi `selesai → diklasifikasi` hanya untuk kasus ini.
+   - **Pembatalan setelah teknisi tiba** menerbitkan invoice `jenis = kunjungan` ke pemilik: biaya pengecekan Rp 50.000 + transport dari estimasi (micro Cost Estimation `biayaKunjungan`).
 2. **Catatan estimasi dimiliki Task HMR**, karena Get Estimasi Biaya dan Set Persetujuan Biaya non-agnostic menurut D1. Microservice Cost Estimation tetap stateless.
-3. **Penghuni membayar biaya perbaikan** (sesuai BPMN Billing). Komisi Kosmos 10% dipotong dari bagian teknisi, bukan biaya tambahan. Laporan kas pemilik mencatat tiga baris per pembayaran: pemasukan, diteruskan ke teknisi, komisi. Ini sekaligus jawaban sementara untuk pertanyaan terbuka #3.
+3. **Pemilik membayar biaya perbaikan.** Pemilik yang memutuskan memanggil teknisi dan menyetujui estimasi, jadi invoice terbit ke pemilik setelah penghuni mengonfirmasi perbaikan selesai. Penghuni tidak menerima atau melihat invoice (hanya diberi tahu biaya ditanggung pemilik). Invoice yang lewat jatuh tempo ditandai `terlambat` (dihitung, tidak disimpan). Komisi Kosmos 10% dipotong dari bagian teknisi, bukan biaya tambahan. Laporan kas pemilik mencatat dua baris pengeluaran per pembayaran: bagian teknisi dan komisi. Ini menjawab pertanyaan terbuka #3; BPMN Billing perlu diubah (participant pembayar: Penghuni → Pemilik).
 4. **Role teknisi** ditambahkan (`Role = penghuni | pemilik | teknisi`) karena teknisi adalah participant di SoaML Repair Verification.
-5. **Work order** punya state machine sendiri: `menunggu_jadwal → dijadwalkan → dikerjakan → menunggu_konfirmasi → selesai`, dengan `menunggu_konfirmasi → dikerjakan` bila penghuni menandai belum beres.
-6. Evidence Verification versi mock memeriksa metadata (dua foto, format gambar, tidak identik, ukuran ≥ 1 KB). Versi akhir bisa memakai LLM vision seperti AI Classification.
-7. Payment gateway memakai adapter mock. Kegagalan bisa disimulasikan dari UI (checkbox demo) untuk menunjukkan cabang "Pembayaran berhasil? Tidak" di BPMN.
+5. **Work order** punya state machine sendiri: `menunggu_jadwal → dijadwalkan → dikerjakan → menunggu_konfirmasi → menunggu_pemilik → selesai`.
+   - `menunggu_konfirmasi → dikerjakan` bila penghuni menandai belum beres; `menunggu_pemilik → dikerjakan` bila pemilik meminta perbaikan ulang.
+   - **Invoice terbit saat pemilik menerima hasil** (`POST /csm/work-order/{id}/terima`), bukan saat penghuni mengonfirmasi, karena pemilik yang membayar.
+   - Bila penghuni tidak merespons, pemilik boleh menerima hasil langsung dari `menunggu_konfirmasi` (tercatat di log servis).
+   - **Biaya tambahan**: teknisi mengajukan saat `dikerjakan` (alasan + jumlah, satu pengajuan menunggu dalam satu waktu); pemilik menyetujui/menolak. Disetujui menambah `biaya_final` dan masuk rincian invoice. Pemilik tidak bisa menerima hasil selama masih ada pengajuan yang belum diputuskan.
+6. **Tagihan sewa bulanan (Task Rent Billing, baru).** Satu tagihan per sewa per periode (`YYYY-MM`), jatuh tempo tanggal 10, nominal dari `unit.harga_bulanan`. Pemilik menerbitkan tagihan bulan berjalan untuk semua sewa aktif (idempoten). Penghuni membayar lewat payment gateway yang sama; pembayaran dicatat sebagai **pemasukan** (`jenis = sewa`) di laporan kas. Laporan kas sekarang punya pemasukan sewa, pengeluaran perbaikan, dan saldo bersih. Proses ini belum ada di D1/D2, jadi perlu BPMN dan SoaML sendiri.
+   - **Bayar sekaligus**: pemilik membayar beberapa invoice perbaikan dalam satu transaksi gateway (satu `ref_gateway`, satu baris Payment per invoice). All-or-nothing: kalau gateway menolak, tidak ada invoice yang lunas.
+7. Evidence Verification versi mock memeriksa metadata (dua foto, format gambar, tidak identik, ukuran ≥ 1 KB). Versi akhir bisa memakai LLM vision seperti AI Classification.
+8. Payment gateway memakai adapter mock. Kegagalan bisa disimulasikan dari UI (checkbox demo) untuk menunjukkan cabang "Pembayaran berhasil? Tidak" di BPMN.
 
 ## 12. Pertanyaan terbuka untuk kelompok
 
@@ -428,5 +438,9 @@ Keputusan desain yang perlu disepakati kelompok:
    - Slide 41-43: endpoint disesuaikan dengan §5 (#5, #6).
    - Di luar Complaint Handling, slide 19 dan 32 punya masalah layering yang sama (Utility memanggil Micro, `reconcilePembayaran` di Invoice). Prototype tidak terdampak, tetapi tetap perlu dibetulkan.
 2. Batas lampiran (§5) dan daftar urgensi (`rendah | sedang | tinggi`).
-3. Siapa yang membayar perbaikan (Pemilik menyetujui, tetapi Penghuni yang membayar)? Ini tidak memengaruhi prototype, tetapi akan ditanyakan dosen.
+3. ~~Siapa yang membayar perbaikan?~~ Diputuskan: pemilik (lihat §11b #3). Sisa pekerjaan di slide:
+   - BPMN Billing: participant pembayar Penghuni → Pemilik; invoice terbit setelah "Pemilik menerima hasil", bukan setelah konfirmasi penghuni.
+   - BPMN Repair Verification: tambah gateway "Perlu teknisi?" (tidak → tutup tiket), "Estimasi disetujui? Tidak" kembali ke tinjau (bukan batal), sub-alur biaya tambahan, dan langkah penerimaan pemilik.
+   - SoaML: consumer Layanan Pembayaran = Pemilik; operasi baru Set Penerimaan Pemilik, Add/Set Persetujuan Biaya Tambahan, Buka Ulang Tiket.
+5. Tagihan sewa dan bayar sekaligus sudah ada di prototype (§11b #6). Perlu disepakati: tanggal jatuh tempo sewa (sekarang tanggal 10), denda keterlambatan (belum ada), dan apakah tagihan sewa diterbitkan otomatis tiap awal bulan (sekarang manual oleh pemilik).
 4. Nomor kelompok di cover (4 atau 11) dan sisa template di closing D1.

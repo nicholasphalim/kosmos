@@ -5,7 +5,7 @@ import { Building, Check, CreditCard, ShieldCheck, TriangleExclamationPoint, Wal
 import { useState } from "react";
 import { Button } from "@/components/ui/Button";
 import { useBayarInvoice } from "@/lib/api/hooks";
-import type { Invoice, MetodePembayaran } from "@/lib/api/types";
+import type { Invoice, MetodePembayaran, Pembayaran } from "@/lib/api/types";
 import { config } from "@/lib/config";
 import { LABEL_METODE, rupiah, waktuLengkap } from "@/lib/format";
 
@@ -16,15 +16,26 @@ const METODE: Array<{ id: MetodePembayaran; ket: string; ikon: IkonKosmos }> = [
   { id: "gopay", ket: "Bayar dengan saldo GoPay", ikon: Wallet },
 ];
 
-/** Set Metode Pembayaran + Process Payment (payment gateway mock). */
-export function PanelBayar({ invoice }: { invoice: Invoice }) {
-  const bayar = useBayarInvoice();
+type PropsUmum = {
+  total: number;
+  /** Diisi bila tagihan sudah lunas. */
+  lunas: { dibayar_at: string | null; pembayaran: Pembayaran | undefined } | null;
+  isPending: boolean;
+  /** Alasan gagal dari gateway pada percobaan terakhir. */
+  gagal: string | null;
+  error: string | null;
+  onBayar: (metode: MetodePembayaran, simulasiGagal: boolean) => void;
+  judul?: string;
+  catatan?: string;
+};
+
+/** Set Metode Pembayaran + Process Payment (payment gateway mock), dipakai invoice, bayar sekaligus, dan sewa. */
+export function PanelBayarUmum({ total, lunas, isPending, gagal, error, onBayar, judul = "Bayar tagihan", catatan }: PropsUmum) {
   const [metode, setMetode] = useState<MetodePembayaran>("qris");
   const [simulasiGagal, setSimulasiGagal] = useState(false);
-  const hasil = bayar.data;
-  const terakhirBerhasil = invoice.pembayaran.findLast((p) => p.status === "berhasil");
 
-  if (invoice.status === "lunas") {
+  if (lunas) {
+    const p = lunas.pembayaran;
     return (
       <aside aria-labelledby="bayar-judul" className="flex min-w-0 flex-[1_1_320px] flex-col items-center gap-4 rounded-[28px] bg-lavender px-6 py-9 text-center text-navy">
         <span aria-hidden className="flex size-18 items-center justify-center rounded-3xl bg-navy">
@@ -34,11 +45,11 @@ export function PanelBayar({ invoice }: { invoice: Invoice }) {
           Lunas
         </h2>
         <p className="text-[15px] text-navy-soft">
-          {rupiah(invoice.total)} dibayar
-          {terakhirBerhasil && ` lewat ${LABEL_METODE[terakhirBerhasil.metode]}`}
-          {invoice.dibayar_at && `, ${waktuLengkap(invoice.dibayar_at)}`}. Bukti bayar sudah dikirim ke WhatsApp.
+          {rupiah(total)} dibayar
+          {p && ` lewat ${LABEL_METODE[p.metode]}`}
+          {lunas.dibayar_at && `, ${waktuLengkap(lunas.dibayar_at)}`}. Bukti bayar sudah dikirim ke WhatsApp.
         </p>
-        {terakhirBerhasil && <span className="font-mono text-xs text-muted">Ref gateway {terakhirBerhasil.ref_gateway}</span>}
+        {p && <span className="font-mono text-xs text-muted">Ref gateway {p.ref_gateway}</span>}
       </aside>
     );
   }
@@ -47,24 +58,24 @@ export function PanelBayar({ invoice }: { invoice: Invoice }) {
     <aside aria-labelledby="bayar-judul" className="panel flex min-w-0 flex-[1_1_320px] flex-col gap-5 p-6 sm:p-7">
       <div className="flex flex-col gap-1">
         <h2 id="bayar-judul" className="font-display text-xl font-extrabold tracking-tight">
-          Bayar tagihan
+          {judul}
         </h2>
-        <p className="text-sm text-muted">Diproses lewat payment gateway. Kosmos tidak menyimpan data kartu atau rekeningmu.</p>
+        <p className="text-sm text-muted">{catatan ?? "Diproses lewat payment gateway. Kosmos tidak menyimpan data kartu atau rekeningmu."}</p>
       </div>
 
-      {hasil?.hasil === "gagal" && (
+      {gagal && (
         <p role="alert" className="flex items-start gap-2.5 rounded-2xl bg-danger-bg px-4 py-3.5 text-sm font-semibold text-danger">
           <TriangleExclamationPoint className="size-4.5 shrink-0" aria-hidden />
-          Pembayaran gagal: {hasil.alasan}. Pilih metode lain atau coba lagi.
+          Pembayaran gagal: {gagal}. Pilih metode lain atau coba lagi.
         </p>
       )}
-      {bayar.error && (
+      {error && (
         <p role="alert" className="rounded-2xl bg-danger-bg px-4 py-3 text-sm font-semibold text-danger">
-          {bayar.error.message}
+          {error}
         </p>
       )}
 
-      <fieldset disabled={bayar.isPending} className="flex flex-col gap-2.5">
+      <fieldset disabled={isPending} className="flex flex-col gap-2.5">
         <legend className="mb-2 text-sm font-bold">Metode pembayaran</legend>
         {METODE.map((m) => (
           <label
@@ -91,14 +102,24 @@ export function PanelBayar({ invoice }: { invoice: Invoice }) {
         </label>
       )}
 
-      <Button
-        size="lg"
-        loading={bayar.isPending}
-        icon={<ShieldCheck className="size-4.5" aria-hidden />}
-        onClick={() => bayar.mutate({ idInvoice: invoice.id, metode, simulasiGagal })}
-      >
-        {bayar.isPending ? "Menghubungi payment gateway…" : `Bayar ${rupiah(invoice.total)}`}
+      <Button size="lg" loading={isPending} icon={<ShieldCheck className="size-4.5" aria-hidden />} onClick={() => onBayar(metode, simulasiGagal)}>
+        {isPending ? "Menghubungi payment gateway…" : `Bayar ${rupiah(total)}`}
       </Button>
     </aside>
+  );
+}
+
+/** Panel bayar satu invoice perbaikan (pemilik). */
+export function PanelBayar({ invoice }: { invoice: Invoice }) {
+  const bayar = useBayarInvoice();
+  return (
+    <PanelBayarUmum
+      total={invoice.total}
+      lunas={invoice.status === "lunas" ? { dibayar_at: invoice.dibayar_at, pembayaran: invoice.pembayaran.findLast((p) => p.status === "berhasil") } : null}
+      isPending={bayar.isPending}
+      gagal={bayar.data?.hasil === "gagal" ? bayar.data.alasan : null}
+      error={bayar.error?.message ?? null}
+      onBayar={(metode, simulasiGagal) => bayar.mutate({ idInvoice: invoice.id, metode, simulasiGagal })}
+    />
   );
 }

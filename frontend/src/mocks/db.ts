@@ -3,12 +3,13 @@
  * di docs/IMPLEMENTATION_PLAN.md §4, supaya perilaku mock = perilaku backend nanti.
  * Disimpan di localStorage agar data demo bertahan saat halaman di-reload.
  */
+import { labelPeriode } from "@/lib/format";
 import { estimasiBiaya, hitungKomisi, jarakKm, verifikasiBukti } from "./micro";
-import type { Kategori, LogServis, MetodePembayaran, RincianBiaya, Role, StatusTiket, StatusWorkOrder, Urgensi, KandidatTeknisi } from "@/lib/api/types";
+import type { BiayaTambahan, Kategori, LogServis, MetodePembayaran, Penanganan, RincianBiaya, Role, StatusTiket, StatusWorkOrder, Urgensi, KandidatTeknisi } from "@/lib/api/types";
 
 export type PenggunaRow = { id: number; nama: string; role: Role; no_wa: string };
 export type PropertiRow = { id: number; nama: string; id_pemilik: number; lat: number; lng: number };
-export type UnitRow = { id: number; id_properti: number; nomor_unit: string };
+export type UnitRow = { id: number; id_properti: number; nomor_unit: string; harga_bulanan: number };
 export type SewaRow = {
   id: number;
   id_unit: number;
@@ -44,6 +45,10 @@ export type TiketRow = {
   perlu_review: boolean;
   ai_confidence: number | null;
   ai_alasan: string | null;
+  /** Cara tiket diselesaikan; null selama belum selesai. */
+  penanganan: Penanganan | null;
+  /** Catatan pemilik saat menangani sendiri. */
+  catatan_penanganan: string | null;
   created_at: string;
   updated_at: string;
 };
@@ -53,6 +58,7 @@ export type RiwayatRow = {
   ke: StatusTiket;
   waktu: string;
   oleh: string;
+  catatan: string | null;
 };
 export type NotifikasiRow = {
   id: number;
@@ -107,6 +113,7 @@ export type WorkOrderRow = {
   id_bukti_sebelum: number | null;
   id_bukti_sesudah: number | null;
   verifikasi: { valid: boolean; skor: number; pemeriksaan: Array<{ label: string; ok: boolean }> } | null;
+  biaya_tambahan: BiayaTambahan[];
   created_at: string;
   updated_at: string;
 };
@@ -123,15 +130,33 @@ export type InvoiceRow = {
   persen_komisi: number;
   komisi: number;
   total: number;
+  /** perbaikan = hasil diterima pemilik; kunjungan = tiket dibatalkan setelah teknisi tiba. */
+  jenis: "perbaikan" | "kunjungan";
   status: "belum_dibayar" | "lunas";
   jatuh_tempo: string;
   dibayar_at: string | null;
   created_at: string;
 };
-/** [Payment] satu baris per percobaan pembayaran ke payment gateway. */
+/** [Rent Invoice] satu tagihan per sewa per bulan (periode YYYY-MM). */
+export type TagihanSewaRow = {
+  id: number;
+  id_sewa: number;
+  periode: string;
+  jumlah: number;
+  jatuh_tempo: string;
+  status: "belum_dibayar" | "lunas";
+  dibayar_at: string | null;
+  created_at: string;
+};
+/**
+ * [Payment] satu baris per percobaan pembayaran ke payment gateway.
+ * Bayar sekaligus = beberapa baris dengan ref_gateway yang sama.
+ */
 export type PembayaranRow = {
   id: number;
-  id_invoice: number;
+  /** Tagihan yang dibayar: invoice perbaikan atau tagihan sewa. */
+  untuk: "invoice" | "sewa";
+  id_tagihan: number;
   ref_gateway: string;
   metode: MetodePembayaran;
   jumlah: number;
@@ -145,7 +170,8 @@ export type TransaksiKasRow = {
   id: number;
   id_pemilik: number;
   waktu: string;
-  jenis: "pemasukan" | "pembayaran_teknisi" | "komisi";
+  /** sewa = uang masuk dari penghuni; pembayaran_teknisi + komisi = uang keluar untuk perbaikan. */
+  jenis: "sewa" | "pembayaran_teknisi" | "komisi";
   keterangan: string;
   jumlah: number;
   ref: string;
@@ -153,10 +179,10 @@ export type TransaksiKasRow = {
 };
 
 export type MockDb = {
-  version: 2;
+  version: 5;
   seq: {
     keluhan: number; tiket: number; lampiran: number; notifikasi: number;
-    estimasi: number; work_order: number; invoice: number; pembayaran: number; kas: number;
+    estimasi: number; work_order: number; invoice: number; pembayaran: number; kas: number; biaya_tambahan: number; tagihan_sewa: number;
   };
   pengguna: PenggunaRow[];
   properti: PropertiRow[];
@@ -172,16 +198,22 @@ export type MockDb = {
   work_order: WorkOrderRow[];
   log_servis: LogServisRow[];
   invoice: InvoiceRow[];
+  tagihan_sewa: TagihanSewaRow[];
   pembayaran: PembayaranRow[];
   kas: TransaksiKasRow[];
 };
 
-const STORAGE_KEY = "kosmos.mockdb.v2";
+const STORAGE_KEY = "kosmos.mockdb.v5";
 
 /* ---------- Seed ---------- */
 
 function menitLalu(menit: number, dari = new Date()) {
   return new Date(dari.getTime() - menit * 60_000).toISOString();
+}
+
+/** "2026-11" dari tanggal lokal. */
+export function periodeDari(d: Date): string {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
 }
 
 function tanggalGeser(hari: number, dari = new Date()) {
@@ -193,8 +225,8 @@ function tanggalGeser(hari: number, dari = new Date()) {
 function seed(): MockDb {
   const now = new Date();
   const db: MockDb = {
-    version: 2,
-    seq: { keluhan: 102, tiket: 58, lampiran: 1, notifikasi: 1, estimasi: 1, work_order: 9, invoice: 1, pembayaran: 1, kas: 1 },
+    version: 5,
+    seq: { keluhan: 102, tiket: 58, lampiran: 1, notifikasi: 1, estimasi: 1, work_order: 9, invoice: 1, pembayaran: 1, kas: 1, biaya_tambahan: 1, tagihan_sewa: 1 },
     pengguna: [
       { id: 1, nama: "Dea", role: "penghuni", no_wa: "0812-xxxx-0101" },
       { id: 2, nama: "Qiqa", role: "penghuni", no_wa: "0813-xxxx-0102" },
@@ -214,12 +246,12 @@ function seed(): MockDb {
       { id: 2, nama: "Kos Kenanga", id_pemilik: 4, lat: -6.8865, lng: 107.615 },
     ],
     unit: [
-      { id: 7, id_properti: 1, nomor_unit: "A-101" },
-      { id: 8, id_properti: 1, nomor_unit: "A-102" },
-      { id: 9, id_properti: 1, nomor_unit: "A-103" },
-      { id: 10, id_properti: 1, nomor_unit: "A-104" },
-      { id: 11, id_properti: 2, nomor_unit: "B-201" },
-      { id: 12, id_properti: 2, nomor_unit: "B-202" },
+      { id: 7, id_properti: 1, nomor_unit: "A-101", harga_bulanan: 1_200_000 },
+      { id: 8, id_properti: 1, nomor_unit: "A-102", harga_bulanan: 1_200_000 },
+      { id: 9, id_properti: 1, nomor_unit: "A-103", harga_bulanan: 1_250_000 },
+      { id: 10, id_properti: 1, nomor_unit: "A-104", harga_bulanan: 1_250_000 },
+      { id: 11, id_properti: 2, nomor_unit: "B-201", harga_bulanan: 1_500_000 },
+      { id: 12, id_properti: 2, nomor_unit: "B-202", harga_bulanan: 1_500_000 },
     ],
     sewa: [
       { id: 1, id_unit: 7, id_penghuni: 1, tanggal_mulai: tanggalGeser(-135), tanggal_selesai: tanggalGeser(230) },
@@ -245,6 +277,7 @@ function seed(): MockDb {
     work_order: [],
     log_servis: [],
     invoice: [],
+    tagihan_sewa: [],
     pembayaran: [],
     kas: [],
   };
@@ -315,6 +348,13 @@ function seed(): MockDb {
       perbaikan: { teknisi: 8, disetujui: 25 * 60, wo: "dikerjakan", jadwal: 75, tiba: 70, mulai: 62 },
     },
     {
+      idTiket: 50, idKeluhan: 94, penghuni: 6, unit: 9, menit: 4 * 24 * 60,
+      deskripsi: "Pintu kamar mandi susah dikunci, engselnya turun jadi pintunya menyangkut.",
+      judul: "Pintu kamar mandi susah dikunci", status: "selesai", kategori: "lainnya", urgensi: "rendah",
+      alasan: "Pintu menyangkut mengganggu, tidak berbahaya.", confidence: 0.83,
+      perbaikan: { teknisi: 10, disetujui: 4 * 24 * 60 - 50, wo: "selesai", jadwal: 3 * 24 * 60 + 600, tiba: 3 * 24 * 60 + 600, mulai: 3 * 24 * 60 + 595, selesai: 3 * 24 * 60 + 540 },
+    },
+    {
       idTiket: 54, idKeluhan: 98, penghuni: 6, unit: 9, menit: 15 * 60,
       deskripsi: "Engsel pintu lemari lepas, pintunya miring dan susah ditutup.",
       judul: "Engsel pintu lemari lepas", status: "diklasifikasi", kategori: "lainnya", urgensi: "rendah",
@@ -343,11 +383,12 @@ function seed(): MockDb {
     db.tiket.push({
       id: a.idTiket, id_keluhan: a.idKeluhan, judul: a.judul, status: a.status, kategori: a.kategori,
       urgensi: a.urgensi, perlu_review: a.urgensi === null, ai_confidence: a.confidence,
-      ai_alasan: a.alasan, created_at: dibuat, updated_at: dibuat,
+      ai_alasan: a.alasan, penanganan: a.status === "selesai" ? "teknisi" : null, catatan_penanganan: null,
+      created_at: dibuat, updated_at: dibuat,
     });
-    db.riwayat.push({ id_tiket: a.idTiket, dari: null, ke: "dibuat", waktu: dibuat, oleh: "sistem" });
+    db.riwayat.push({ id_tiket: a.idTiket, dari: null, ke: "dibuat", waktu: dibuat, oleh: "sistem", catatan: null });
     if (a.status !== "dibuat") {
-      db.riwayat.push({ id_tiket: a.idTiket, dari: "dibuat", ke: "diklasifikasi", waktu: dibuat, oleh: "AI Classification" });
+      db.riwayat.push({ id_tiket: a.idTiket, dari: "dibuat", ke: "diklasifikasi", waktu: dibuat, oleh: "AI Classification", catatan: null });
     }
 
     const r = a.perbaikan;
@@ -364,7 +405,7 @@ function seed(): MockDb {
       id: idEst, id_tiket: a.idTiket, id_teknisi: r.teknisi, kandidat: [], rincian: est.rincian, total: est.total,
       status: "disetujui", diputuskan_oleh: nama(4), diputuskan_at: waktuSetuju, created_at: menitLalu(r.disetujui + 5, now),
     });
-    db.riwayat.push({ id_tiket: a.idTiket, dari: "diklasifikasi", ke: "diproses", waktu: waktuSetuju, oleh: nama(4) });
+    db.riwayat.push({ id_tiket: a.idTiket, dari: "diklasifikasi", ke: "diproses", waktu: waktuSetuju, oleh: nama(4), catatan: null });
 
     const idWo = db.seq.work_order++;
     const waktuJadwal = menitLalu(r.jadwal, now);
@@ -386,8 +427,9 @@ function seed(): MockDb {
       idSebelum = foto(`sebelum-${u.nomor_unit}.jpg`, "/bukti/sebelum.svg", 184_220);
       idSesudah = foto(`sesudah-${u.nomor_unit}.jpg`, "/bukti/sesudah.svg", 201_904);
       log("bukti_valid", r.selesai + 10, "Evidence Verification", "4 dari 4 pemeriksaan lolos");
-      log("selesai", r.selesai, nama(a.penghuni), "Penghuni mengonfirmasi perbaikan selesai");
-      db.riwayat.push({ id_tiket: a.idTiket, dari: "diproses", ke: "selesai", waktu: menitLalu(r.selesai, now), oleh: nama(a.penghuni) });
+      log("dikonfirmasi_penghuni", r.selesai, nama(a.penghuni), null);
+      log("selesai", r.selesai - 30, nama(4), "Pemilik menerima hasil perbaikan");
+      db.riwayat.push({ id_tiket: a.idTiket, dari: "diproses", ke: "selesai", waktu: menitLalu(r.selesai - 30, now), oleh: nama(4), catatan: null });
     }
     db.work_order.push({
       id: idWo, id_tiket: a.idTiket, id_teknisi: r.teknisi, id_estimasi: idEst, status: r.wo, biaya_final: est.total,
@@ -396,40 +438,75 @@ function seed(): MockDb {
         { nama_file: "sebelum.jpg", mime: "image/jpeg", ukuran_byte: 184_220 },
         { nama_file: "sesudah.jpg", mime: "image/jpeg", ukuran_byte: 201_904 },
       ) : null,
+      biaya_tambahan: [],
       created_at: waktuSetuju, updated_at: menitLalu(r.selesai ?? r.mulai ?? r.disetujui, now),
     });
 
-    // Billing & Commission: invoice terbit saat penghuni mengonfirmasi selesai.
+    // Billing & Commission: invoice terbit ke pemilik saat pemilik menerima hasil perbaikan.
     if (r.selesai === undefined) continue;
     const { persen, komisi } = hitungKomisi(est.total);
-    const terbit = menitLalu(r.selesai, now);
+    const terbit = menitLalu(r.selesai - 30, now);
     const idInv = db.seq.invoice++;
     const jatuhTempo = new Date(terbit);
     jatuhTempo.setDate(jatuhTempo.getDate() + 7);
     db.invoice.push({
       id: idInv, id_work_order: idWo, rincian: est.rincian, biaya: est.total, persen_komisi: persen, komisi,
-      total: est.total, status: r.bayar ? "lunas" : "belum_dibayar", jatuh_tempo: jatuhTempo.toISOString().slice(0, 10),
+      total: est.total, jenis: "perbaikan", status: r.bayar ? "lunas" : "belum_dibayar", jatuh_tempo: jatuhTempo.toISOString().slice(0, 10),
       dibayar_at: r.bayar ? menitLalu(r.bayar.menit, now) : null, created_at: terbit,
     });
     if (!r.bayar) continue;
     const ref = () => `PG-${Math.random().toString(36).slice(2, 8).toUpperCase()}`;
     if (r.bayar.gagalDulu) {
       db.pembayaran.push({
-        id: db.seq.pembayaran++, id_invoice: idInv, ref_gateway: ref(), metode: r.bayar.gagalDulu, jumlah: est.total,
+        id: db.seq.pembayaran++, untuk: "invoice", id_tagihan: idInv, ref_gateway: ref(), metode: r.bayar.gagalDulu, jumlah: est.total,
         status: "gagal", alasan_gagal: "Saldo e-wallet tidak cukup", direkonsiliasi: false, created_at: menitLalu(r.bayar.menit + 15, now),
       });
     }
     const dibayar = menitLalu(r.bayar.menit, now);
     db.pembayaran.push({
-      id: db.seq.pembayaran++, id_invoice: idInv, ref_gateway: ref(), metode: r.bayar.metode, jumlah: est.total,
+      id: db.seq.pembayaran++, untuk: "invoice", id_tagihan: idInv, ref_gateway: ref(), metode: r.bayar.metode, jumlah: est.total,
       status: "berhasil", alasan_gagal: null, direkonsiliasi: true, created_at: dibayar,
     });
     const kode = `INV-${String(idInv).padStart(4, "0")}`;
     const kas = (jenis: TransaksiKasRow["jenis"], keterangan: string, jumlah: number) =>
       db.kas.push({ id: db.seq.kas++, id_pemilik: p.id_pemilik, waktu: dibayar, jenis, keterangan, jumlah, ref: kode, properti: p.nama });
-    kas("pemasukan", `Pembayaran perbaikan ${u.nomor_unit} oleh ${nama(a.penghuni)}`, est.total);
-    kas("pembayaran_teknisi", `Diteruskan ke ${nama(r.teknisi)}`, -(est.total - komisi));
-    kas("komisi", `Komisi Kosmos ${persen}%`, -komisi);
+    kas("pembayaran_teknisi", `Biaya perbaikan ${u.nomor_unit}, ke ${nama(r.teknisi)}`, -(est.total - komisi));
+    kas("komisi", `Komisi Kosmos ${persen}% perbaikan ${u.nomor_unit}`, -komisi);
+  }
+
+  /*
+   * Rent Billing: tagihan sewa dua bulan lalu & bulan lalu (sebagian besar lunas) dan bulan berjalan.
+   * Putra (sewa baru) sengaja belum ditagih bulan ini supaya tombol "Terbitkan tagihan" bisa didemokan.
+   * Halim belum membayar bulan lalu -> tampil terlambat.
+   */
+  const hariIni = now.toISOString().slice(0, 10);
+  const BELUM_BAYAR: Record<number, number[]> = { 0: [1, 3, 5], [-1]: [5] }; // id penghuni: Dea, Fredo, Halim
+  for (const offset of [-2, -1, 0]) {
+    const awalBulan = new Date(now.getFullYear(), now.getMonth() + offset, 1, 8);
+    const akhir = new Date(now.getFullYear(), now.getMonth() + offset + 1, 0).toISOString().slice(0, 10);
+    const per = periodeDari(awalBulan);
+    for (const sw of db.sewa) {
+      if (sw.tanggal_mulai > akhir || sw.tanggal_selesai < `${per}-01`) continue;
+      if (offset === 0 && (sw.id === 6 || sw.tanggal_selesai < hariIni)) continue;
+      const { u, p } = unitInfo(sw.id_unit);
+      const id = db.seq.tagihan_sewa++;
+      const lunas = !(BELUM_BAYAR[offset] ?? []).includes(sw.id_penghuni);
+      const tglBayar = new Date(Math.min(new Date(now.getFullYear(), now.getMonth() + offset, 5, 10).getTime(), now.getTime() - 3_600_000)).toISOString();
+      db.tagihan_sewa.push({
+        id, id_sewa: sw.id, periode: per, jumlah: u.harga_bulanan, jatuh_tempo: `${per}-10`,
+        status: lunas ? "lunas" : "belum_dibayar", dibayar_at: lunas ? tglBayar : null, created_at: awalBulan.toISOString(),
+      });
+      if (!lunas) continue;
+      db.pembayaran.push({
+        id: db.seq.pembayaran++, untuk: "sewa", id_tagihan: id, ref_gateway: `PG-${Math.random().toString(36).slice(2, 8).toUpperCase()}`,
+        metode: "va_bca", jumlah: u.harga_bulanan, status: "berhasil", alasan_gagal: null, direkonsiliasi: true, created_at: tglBayar,
+      });
+      db.kas.push({
+        id: db.seq.kas++, id_pemilik: p.id_pemilik, waktu: tglBayar, jenis: "sewa",
+        keterangan: `Sewa ${u.nomor_unit} ${labelPeriode(per)} · ${nama(sw.id_penghuni)}`, jumlah: u.harga_bulanan,
+        ref: `SWA-${String(id).padStart(4, "0")}`, properti: p.nama,
+      });
+    }
   }
 
   const notif = (id_penerima: number, kode: string, jenis: NotifikasiRow["jenis"], isi: string, menit: number) => {
@@ -439,7 +516,7 @@ function seed(): MockDb {
       status_kirim: "terkirim", created_at: menitLalu(menit, now),
     });
   };
-  notif(1, "TKT-0052", "invoice", "Tagihan perbaikan INV-0003 Rp 165.000 sudah terbit. Bayar sebelum jatuh tempo.", 2 * 24 * 60 + 240);
+  notif(4, "TKT-0052", "invoice", `Tagihan perbaikan A-101 (${nama(1)}) INV-0003 Rp 165.000 sudah terbit. Bayar sebelum jatuh tempo.`, 2 * 24 * 60 + 240);
   notif(8, "TKT-0051", "teknisi_ditugaskan", "Pekerjaan baru WO-0012: Lampu kamar mandi mati total, Kos Kenanga B-201.", 25 * 60);
   notif(3, "TKT-0051", "progres", "Pak Slamet sudah tiba dan mulai memperbaiki.", 62);
   notif(4, "TKT-0056", "tiket_dibuat", `Keran kamar mandi tidak menutup. Unit B-202 (${nama(5)}).`, 110);
@@ -460,7 +537,7 @@ export function db(): MockDb {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (raw) {
       const parsed = JSON.parse(raw) as MockDb;
-      if (parsed.version === 2) return (instance = parsed);
+      if (parsed.version === 5) return (instance = parsed);
     }
   } catch {
     /* data rusak: seed ulang */

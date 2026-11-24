@@ -36,6 +36,8 @@ export type CalonTeknisi = {
   jarak_km: number;
   /** Jumlah work order aktif yang sedang dipegang. */
   beban: number;
+  /** Alasan teknisi ini tidak boleh dipilih lagi untuk tiket ini (mis. estimasinya ditolak pemilik). */
+  dikecualikan?: string;
 };
 
 /**
@@ -47,6 +49,7 @@ export function matchTeknisi(kategori: Kategori, urgensi: Urgensi, calon: CalonT
   const hasil = calon.map((c): KandidatTeknisi => {
     const t = c.teknisi;
     const tolak = (alasan: string): KandidatTeknisi => ({ teknisi: t, tersedia: c.tersedia, jarak_km: c.jarak_km, lolos: false, skor: null, alasan });
+    if (c.dikecualikan) return tolak(c.dikecualikan);
     if (!t.keahlian.includes(kategori)) return tolak("Bukan keahlian kategori ini");
     if (!t.terverifikasi) return tolak("Belum terverifikasi");
     if (!c.tersedia) return tolak("Sedang tidak tersedia");
@@ -92,6 +95,21 @@ export function estimasiBiaya(input: { kategori: Kategori; urgensi: Urgensi; des
   const rincian: RincianBiaya[] = [JASA[input.kategori], { label: material.label, jumlah: material.jumlah }];
   if (input.urgensi === "tinggi") rincian.push({ label: "Penanganan prioritas (< 4 jam)", jumlah: 50_000 });
   rincian.push({ label: `Transport teknisi (${km(input.jarak_km)})`, jumlah: Math.max(10_000, Math.round(input.jarak_km * 5) * 1000) });
+  return { rincian, total: rincian.reduce((s, r) => s + r.jumlah, 0) };
+}
+
+export const BIAYA_PENGECEKAN = 50_000;
+
+/**
+ * Biaya kunjungan saat tiket dibatalkan setelah teknisi tiba di lokasi:
+ * transport dari estimasi yang disetujui + biaya pengecekan tetap.
+ */
+export function biayaKunjungan(rincianEstimasi: RincianBiaya[]) {
+  const transport = rincianEstimasi.find((r) => r.label.startsWith("Transport teknisi"));
+  const rincian: RincianBiaya[] = [
+    { label: "Biaya pengecekan (perbaikan dibatalkan)", jumlah: BIAYA_PENGECEKAN },
+    ...(transport ? [transport] : []),
+  ];
   return { rincian, total: rincian.reduce((s, r) => s + r.jumlah, 0) };
 }
 

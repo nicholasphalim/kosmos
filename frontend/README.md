@@ -26,7 +26,7 @@ Data demo disimpan di localStorage browser. Untuk mengembalikan data awal, pilih
 | `npm run typecheck` | Cek tipe (dipakai juga untuk mendeteksi kontrak yang bergeser) |
 | `npm run lint` | ESLint |
 | `npm run demo:reset` | Kembalikan data demo ke kondisi awal (refresh browser setelahnya) |
-| `npm run test:e2e` | Playwright: 12 skenario (build dulu dengan `npm run build`) |
+| `npm run test:e2e` | Playwright: 19 skenario (build dulu dengan `npm run build`) |
 
 ## Struktur
 
@@ -36,10 +36,12 @@ src/
 │  ├─ login/                 Pilih akun demo
 │  ├─ penghuni/lapor/        Layanan Pengajuan Keluhan (+ hasil ditolak)
 │  ├─ penghuni/tiket/        Tiket saya, detail tiket (+ jadwal, progres, konfirmasi selesai)
-│  ├─ penghuni/tagihan/      Daftar invoice, bayar via payment gateway (mock)
+│  ├─ penghuni/sewa/         Tagihan sewa bulanan + bayar via payment gateway (mock)
 │  ├─ pemilik/               Dashboard tiket + WhatsApp Outbox
-│  ├─ pemilik/tiket/[id]     Cari teknisi, estimasi biaya, setujui/tolak, pantau work order
-│  ├─ pemilik/keuangan/      Laporan kas + daftar invoice
+│  ├─ pemilik/tiket/[id]     Tinjau tiket: tangani sendiri atau panggil teknisi, setujui/tolak estimasi, pantau work order
+│  ├─ pemilik/keuangan/      Laporan kas (sewa masuk, perbaikan keluar) + invoice (bayar sekaligus) + tagihan sewa
+│  ├─ pemilik/tagihan/[id]   Invoice perbaikan, bayar via payment gateway (mock)
+│  ├─ pemilik/tagihan/sekaligus  Bayar beberapa invoice dalam satu transaksi
 │  └─ teknisi/               Daftar work order, catat log servis, unggah bukti
 ├─ components/               UI per domain: keluhan, tiket, pemilik, notifikasi, layout, ui
 ├─ lib/
@@ -66,14 +68,13 @@ src/
 
 | Akun | Skenario |
 |---|---|
-| Dea (sewa aktif) | Lapor → tiket dibuat → diklasifikasi AI → WhatsApp ke Dea dan Pak Derren |
+| Dea (sewa aktif) | Lapor → tiket dibuat → diklasifikasi AI → WhatsApp ke Dea dan Pak Derren. Menu Sewa: bayar sewa bulan ini |
 | Qiqa (sewa berakhir) | Lapor → ditolak, tidak ada tiket |
-| Pak Derren (pemilik) | Filter prioritas tinggi, klasifikasi ulang, batalkan. Buka TKT-0057 → Cari teknisi → setujui estimasi. Menu Keuangan: laporan kas |
-| Fredo (penghuni) | Pilih jadwal kunjungan TKT-0057, konfirmasi selesai TKT-0051 setelah bukti diunggah, lalu bayar |
-| Pak Slamet (teknisi) | WO-0012 (sedang dikerjakan): unggah foto sebelum/sesudah. Pekerjaan TKT-0057 muncul setelah estimasi disetujui |
-| Dea (penghuni) | Menu Tagihan: INV-0003 belum dibayar. Centang "simulasikan pembayaran gagal" untuk demo gagal lalu bayar ulang |
+| Pak Derren (pemilik) | Filter prioritas tinggi, klasifikasi ulang, batalkan. Buka TKT-0057 → Tinjau → Panggil teknisi → setujui/tolak estimasi (tolak = cari teknisi lain), atau Tangani sendiri. TKT-0051: setujui biaya tambahan dari teknisi, terima hasil, atau batalkan (biaya kunjungan karena teknisi sudah tiba). Menu Keuangan: laporan kas, tab Sewa → "Terbitkan tagihan bulan ini" (Putra belum ditagih), tab Invoice → pilih semua → Bayar sekaligus, invoice INV-0003 belum dibayar (centang "simulasikan pembayaran gagal" untuk demo gagal lalu bayar ulang) |
+| Fredo (penghuni) | Pilih jadwal kunjungan TKT-0057, konfirmasi selesai TKT-0051 setelah bukti diunggah, lalu pemilik menerima hasil. Buka ulang tiket yang ditangani sendiri oleh pemilik |
+| Pak Slamet (teknisi) | WO-0012 (sedang dikerjakan): ajukan biaya tambahan, unggah foto sebelum/sesudah. Pekerjaan TKT-0057 muncul setelah estimasi disetujui |
 
-Alur lengkap tiga proses: Dea/Fredo lapor → Pak Derren cari teknisi dan setujui estimasi → penghuni pilih jadwal → teknisi catat tiba, mulai, unggah bukti (diverifikasi Evidence Verification) → penghuni konfirmasi selesai → invoice terbit (komisi 10% dipotong dari bagian teknisi) → penghuni bayar → laporan kas pemilik bertambah.
+Alur lengkap tiga proses: Dea/Fredo lapor → Pak Derren meninjau tiket dan memutuskan perlu teknisi atau tidak → bila perlu, cari teknisi dan setujui estimasi → penghuni pilih jadwal → teknisi catat tiba, mulai, unggah bukti (diverifikasi Evidence Verification) → penghuni konfirmasi selesai → pemilik menerima hasil → invoice terbit ke pemilik (komisi 10% dipotong dari bagian teknisi) → pemilik bayar → laporan kas pemilik bertambah.
 
 Bukti dengan dua foto identik (nama dan ukuran sama) atau foto < 1 KB ditolak Evidence Verification.
 
