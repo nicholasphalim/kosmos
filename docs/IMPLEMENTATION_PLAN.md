@@ -11,8 +11,8 @@ Deadline: minggu ke-2/3 Desember 2026. Fokus saat ini: **frontend dengan mock**,
 |---|---|---|
 | Frontend | Next.js (App Router) + TypeScript + Tailwind + shadcn/ui | Standar industri, deploy gratis di Vercel |
 | Backend | FastAPI (Python 3.12/3.13 via `uv`) | Mapping SOAML ke kode paling jelas, Swagger otomatis |
-| Database | PostgreSQL. Lokal: Docker. Produksi: Postgres yang di-host Supabase | Kode sama persis, hanya `DATABASE_URL` yang beda |
-| File storage | Lokal: folder disk. Produksi: Supabase Storage | Lewat adapter, bisa diganti |
+| Database | SQLite (satu file, tanpa Docker). Jika deploy: Postgres (Neon/Supabase) | Kode sama persis, hanya `DATABASE_URL` yang beda |
+| File storage | Folder `backend/uploads`, disajikan lewat `/media-files` | Cukup untuk prototype |
 | Akses DB | Hanya backend. Frontend tidak pernah menyentuh DB/Supabase | Syarat SOA: logika bisnis ada di service layer |
 | Auth | Demo login (pilih akun) yang menerbitkan JWT asli | Bentuk `Authorization: Bearer` sesuai draf API, tanpa kerumitan registrasi |
 | AI Classifier | Sekarang mock (aturan keyword). Akhir: LLM API multimodal (teks + gambar) | Adapter pattern, ganti via env var |
@@ -313,42 +313,121 @@ Urgensi: `korslet|percikan|banjir|bau gosong` → tinggi; `bocor|mati total` →
 
 ---
 
-## 7. Backend (Fase 3, ringkas)
+## 7. Backend
+
+Keputusan (24 Nov 2026):
+- **Cakupan:** ketiga proses (Complaint Handling, Repair Verification, Billing & Commission), semua 26 endpoint di `contracts/openapi.yaml`, ditambah `POST /dev/reset`. Billing dikerjakan paling akhir, tetapi tetap masuk backend. Mode campuran (sebagian mock, sebagian live) tidak dipakai karena data di localStorage dan di database akan terpecah.
+- **AI Classification:** tetap mock keyword (aturan sama dengan `frontend/src/lib/klasifikasi.ts`). Adapter tetap disiapkan agar bisa diganti.
+- **Hosting:** lokal dulu. Keputusan deploy ditunda ke fase B4.
+- **Pencarian teknisi dan estimasi dipicu otomatis** setelah tiket diklasifikasi, sesuai BPMN Repair Verification. Pemilik tinggal menyetujui atau menolak. Mock frontend dan UI pemilik diubah lebih dulu, karena mock adalah cetak biru backend.
+- **Prinsip:** sesederhana mungkin untuk dijalankan. Prasyarat hanya Node dan `uv`, tanpa Docker.
 
 ### 7.1 Stack
 
-FastAPI, Pydantic v2, SQLAlchemy 2.0 + Alembic (migrasi), psycopg 3, PyJWT, python-multipart, httpx, SDK penyedia LLM (fase akhir), pytest. Kelola environment dengan `uv`.
+| Komponen | Pilihan | Catatan |
+|---|---|---|
+| Bahasa + environment | Python 3.13 lewat `uv` (`uv python pin 3.13`) | `uv` meng-install Python dan dependensi sekaligus |
+| Framework | FastAPI | Swagger `/docs` otomatis |
+| Skema request/response | Pydantic v2, ditulis tangan per service (`schemas.py`) | Nama dan bentuk mengikuti `openapi.yaml` |
+| Database | SQLite (`backend/kosmos.db`) lewat SQLAlchemy 2.0 (`Mapped[]`) | Data tetap tersimpan walaupun backend dimatikan. Untuk deploy cukup ganti `DATABASE_URL` ke Postgres |
+| Pembuatan tabel | `Base.metadata.create_all()` + `seed.py` | Tanpa Alembic. Jika struktur tabel berubah: hapus `kosmos.db`, lalu jalankan lagi |
+| Auth | PyJWT (demo login yang menerbitkan JWT asli) | |
+| Upload | python-multipart + `StaticFiles` | |
+| Test | pytest | |
 
-Python 3.14 yang terpasang mungkin belum didukung semua library. Pin ke 3.12 atau 3.13 dengan `uv python pin 3.13`.
+Yang sengaja **tidak** dipakai: Docker, Alembic, generator kode Pydantic, dan repository layer. Semuanya menambah alat atau lapisan tanpa menambah nilai untuk prototype ini.
 
-### 7.2 Struktur folder
+### 7.2 Mock frontend sebagai cetak biru
+
+Mock di `frontend/src/mocks` sudah berisi seluruh aturan bisnis. Backend memindahkannya 1:1:
+
+| Mock (TypeScript) | Backend (Python) |
+|---|---|
+| `db.ts` (tipe tabel + seed) | `models.py` per service + `seed.py` |
+| `services.ts` (per layer) | `service.py` per service |
+| `micro.ts` | `services/micro/*.py`, fungsi murni tanpa database |
+| `handlers.ts` | `router.py` per service |
+| Tipe dari `openapi.yaml` | `schemas.py` per service (ditulis tangan) |
+| `ServiceError(status, kode, pesan)` | `core/errors.py`, bentuk response identik |
+
+### 7.3 Struktur folder
 
 ```
-backend/app/
-├─ main.py                 ← include semua router, CORS, error handler
-├─ core/ (config.py, db.py, security.py, errors.py, trace.py)
-└─ services/
-   ├─ task/hmr/            router.py · service.py · schemas.py
-   ├─ entity/tenant_lease/ router.py · service.py · repository.py · models.py · schemas.py
-   ├─ entity/complaint_ticket/ (sama) + state_machine.py
-   └─ utility/
-      ├─ media_storage/     … adapters/local.py, adapters/supabase.py
-      ├─ ai_classification/ … adapters/mock.py, adapters/llm.py
-      └─ notification/      … adapters/mock_whatsapp.py
+backend/
+├─ pyproject.toml · .env.example
+├─ kosmos.db                 ← dibuat otomatis (gitignored)
+├─ uploads/                  ← file lampiran (gitignored)
+└─ app/
+   ├─ main.py                ← router, CORS, error handler, StaticFiles
+   ├─ core/                  config, db, security (JWT demo), errors, trace, waktu
+   ├─ services/
+   │  ├─ task/               hmr/, csm/
+   │  ├─ micro/              technician_matching, cost_estimation, evidence_verification, commission_calculation
+   │  ├─ entity/             tenant_lease, complaint_ticket, technician, work_order, invoice, payment, financial_ledger
+   │  └─ utility/            media_storage, ai_classification, notification
+   ├─ dev/                   router /dev/reset
+   ├─ seed.py
+   └─ tests/
 ```
 
-- Alur pemanggilan: `router → service → repository`. Service lain hanya boleh meng-import `service.py` milik service tujuan.
-- Pilihan adapter lewat env: `AI_PROVIDER=mock|llm`, `WA_PROVIDER=mock`, `STORAGE_PROVIDER=local|supabase`.
-- AI nyata direncanakan memakai model LLM multimodal yang cepat (input teks + gambar) dengan output terstruktur `{kategori, urgensi, confidence, alasan}`. Detail parameter ditentukan saat Fase 4.
+Isi tiap service: `router.py`, `service.py`, `models.py` (khusus Entity), `schemas.py`. Adapter (`adapters/`) hanya untuk AI, WhatsApp, dan payment.
 
-### 7.3 Database lokal
+Aturan:
+- Alur pemanggilan `router → service`. Service Entity langsung memakai `Session` SQLAlchemy dan menjadi satu-satunya pemilik tabelnya.
+- Hanya Task yang boleh memanggil service lain. Entity tidak memanggil Entity lain. Micro tidak membaca database. Utility tidak tahu domain bisnis.
+- Setiap router diberi tag Swagger per layer, misalnya `Task: HMR`, `Entity: Complaint Ticket`, `Utility: Notification`. Halaman `/docs` dipakai untuk slide API Documentation.
+- Adapter dipilih lewat env: `AI_PROVIDER=mock`, `WA_PROVIDER=mock`, `PAYMENT_PROVIDER=mock`.
+
+### 7.4 Detail teknis yang wajib
+
+| Topik | Aturan | Alasan |
+|---|---|---|
+| Transaksi | Commit pertama: keluhan + tiket. Lalu klasifikasi, pencarian teknisi, dan estimasi di commit kedua. Notifikasi dikirim setelah commit. Tanpa `BackgroundTasks` | Tiket tetap ada walaupun AI gagal (sesuai §3.1), dan `trace` tetap kembali di response |
+| Waktu | Satu `TypeDecorator` `UTCDateTime`: disimpan sebagai UTC, dikirim sebagai ISO dengan akhiran `Z` | Tanpa `Z`, browser membaca jam sebagai waktu lokal dan bergeser 7 jam |
+| Tanggal | Satu fungsi `today()` berzona `Asia/Jakarta` untuk status sewa. Seed memakai tanggal relatif terhadap waktu reset | Sama dengan mock, dan status sewa tidak berubah tergantung jam |
+| Uang | Integer rupiah. Pembulatan memakai helper `round_half_up` | `round()` Python berbeda dari `Math.round` JavaScript, bisa selisih Rp1 |
+| SQLite | `PRAGMA foreign_keys=ON`, `check_same_thread=False`, uvicorn satu worker | Foreign key ditegakkan, aman untuk akses bersamaan skala demo |
+| File upload | Disimpan di `backend/uploads/`, disajikan di `/media-files`. URL dibentuk dari `PUBLIC_BASE_URL` | Browser bisa membuka foto lampiran dan bukti |
+| CORS | `allow_origins` dari env (default `http://localhost:3000`), header `Authorization` diizinkan | Dikerjakan di B0 |
+| Trace | `core/trace.py` dengan `trace.step(service, layer, operasi)`. Field `layer` harus benar. Tanpa latensi buatan. Setiap langkah juga dicetak satu baris di log terminal | Panel trace sudah tidak ada di UI. Trace terlihat di Swagger dan log saat demo |
+| Reset | `POST /dev/reset` (aktif hanya saat `DEMO_MODE=true`) menjalankan `drop_all`, `create_all`, `seed`, dan mengosongkan `uploads/`. Endpoint ditambahkan ke `openapi.yaml`. `resetDemo()` di frontend memanggilnya di mode live | Tombol "Reset data demo" dan `npm run demo:reset` tetap berfungsi |
+
+### 7.5 Cara menjalankan
+
+Prasyarat: Node dan `uv`.
 
 ```bash
-docker run -d --name kosmos-db -e POSTGRES_PASSWORD=kosmos -e POSTGRES_DB=kosmos -p 5432:5432 postgres:16
-# DATABASE_URL=postgresql+psycopg://postgres:kosmos@localhost:5432/kosmos
+npm run dev:all     # di root: backend (port 8000) + frontend mode live (port 3000)
 ```
 
-Saat produksi, cukup ganti `DATABASE_URL` ke connection string Supabase. Tidak ada kode yang berubah.
+- Script memakai `concurrently --kill-others` dan `cross-env NEXT_PUBLIC_API_MODE=live`, sehingga jalan juga di Windows.
+- Perintah backend: `uv run --directory backend uvicorn app.main:app --port 8000`. Saat start, tabel dan seed dibuat otomatis jika `kosmos.db` belum ada.
+- Mode ditentukan saat `next dev` dimulai. Ganti mode berarti restart.
+- Cadangan saat demo: `npm run dev` di `frontend/` (mode mock) tetap berfungsi tanpa backend.
+- Akses dari HP di WiFi yang sama: jalankan backend dengan `--host 0.0.0.0`, lalu isi `PUBLIC_BASE_URL` dan `CORS_ORIGINS` dengan IP laptop.
+
+### 7.6 Jadwal backend
+
+| Fase | Tanggal | Hasil |
+|---|---|---|
+| B0 | 24–25 Nov | Ubah mock + UI pemilik agar estimasi dibuat otomatis. Scaffold backend, config, db, model Tenant and Lease + Complaint Ticket, seed, auth demo, CORS, error handler, `/dev/reset`, tes rute vs `openapi.yaml` |
+| B1 | 26–29 Nov | Complaint Handling penuh + pemicu otomatis pencarian teknisi dan estimasi, media + `/media-files`. Frontend mode live jalan untuk alur ini |
+| Gate | 29 Nov | Jika alur Complaint Handling belum jalan di mode live, cakupan B2 dipangkas sebelum memakai buffer |
+| B2 | 30 Nov – 3 Des | Repair Verification (model teknisi, work order, log, bukti, konfirmasi) |
+| B3 | 4–6 Des | Billing & Commission (invoice, payment, kas). 12 tes E2E lulus di mode live |
+| B4 | 7–9 Des | `npm run dev:all`, README (langkah `.env.local` dikembalikan), keputusan deploy |
+| Buffer | 10–14 Des | Perbaikan dan gladi demo |
+
+Model tabel ditambahkan per fase. Dengan `create_all`, cukup hapus `kosmos.db` lalu jalankan ulang.
+
+### 7.7 Bukti kesesuaian
+
+| Yang dibuktikan | Cara |
+|---|---|
+| Rute sesuai kontrak | pytest mencocokkan path + method di `app.openapi()` dengan `contracts/openapi.yaml` |
+| Layering SOA | pytest memeriksa import: Entity dan Utility tidak meng-import `services.task`, Entity tidak meng-import Entity lain, Micro tidak meng-import `core.db` |
+| Aturan bisnis | pytest untuk state machine tiket dan work order (termasuk 409), validasi sewa, komisi |
+| Bentuk response | `response_model` FastAPI + 12 tes E2E Playwright dengan `NEXT_PUBLIC_API_MODE=live`. Validasi skema terhadap yaml untuk 3–4 endpoint kunci jika sempat |
 
 ---
 
@@ -360,7 +439,7 @@ Saat produksi, cukup ganti `DATABASE_URL` ke connection string Supabase. Tidak a
 | Frontend E2E (Playwright, mode mock) | (1) Budi mengajukan keluhan → tiket diklasifikasi → muncul di outbox. (2) Sari → ditolak |
 | Backend unit | State machine tiket (transisi legal/ilegal), perhitungan status sewa |
 | Backend integrasi | `POST /hmr/keluhan` dengan adapter mock: kasus diterima, ditolak, dan AI gagal |
-| Kontrak | Generate tipe dari `/openapi.json` FastAPI → `tsc --noEmit` di frontend. Error compile berarti kontrak bergeser |
+| Kontrak | Rute FastAPI dicocokkan dengan `contracts/openapi.yaml`, ditambah 12 E2E di mode live (lihat §7.7) |
 
 ---
 
@@ -370,7 +449,8 @@ Saat produksi, cukup ganti `DATABASE_URL` ke connection string Supabase. Tidak a
 |---|---|---|
 | Frontend | Vercel | Set `NEXT_PUBLIC_API_MODE=live` dan base URL |
 | Backend | Render atau Railway | Free tier bisa "tidur". Buka URL backend 1-2 menit sebelum presentasi |
-| DB + Storage | Supabase (free) | Project free bisa di-pause jika lama tidak aktif. Cek H-1 presentasi |
+| DB | Postgres gratis (Neon atau Supabase) lewat `DATABASE_URL` | Project free bisa di-pause jika lama tidak aktif. Cek H-1 presentasi |
+| File upload | Disk server | Filesystem Render free tidak permanen, file hilang saat redeploy. Diterima untuk demo |
 | CORS | FastAPI `allow_origins` | Hanya domain Vercel + localhost |
 
 Rencana cadangan demo: deploy frontend kedua dengan `API_MODE=mock`. Demo tetap jalan walaupun backend mati.
@@ -386,9 +466,8 @@ QR code untuk slide 44 mengarah ke URL Vercel.
 | 0. Fondasi | 13–15 Nov | Keputusan §2 disetujui kelompok; `openapi.yaml`; scaffold Next.js + shadcn + MSW | `npm run dev` jalan, 1 endpoint mock bisa dipanggil dengan tipe ter-generate |
 | 1. Frontend inti | 16–22 Nov | Login demo, form keluhan, hasil + trace, dashboard penghuni | Happy path dan kasus ditolak jalan di mode mock |
 | 2. Frontend lengkap | 23–29 Nov | Dashboard + detail pemilik, ubah status, outbox WA, timeline, empty/error state, responsif | Semua skenario demo jalan di mode mock; E2E hijau. **Milestone frontend selesai** |
-| 3. Backend | 30 Nov–6 Des | FastAPI, DB, seed, semua service dengan adapter mock, test | Swagger `/docs` lengkap; test integrasi hijau |
-| 4. Integrasi + deploy | 7–10 Des | Mode live, LLM API nyata, Supabase Storage, deploy | Skenario demo jalan di URL publik |
-| 5. Buffer | 11–14 Des | Bug fix, naskah demo, screenshot Swagger untuk slide 41-43, QR | Gladi demo 2x tanpa error |
+| 3. Backend | 24 Nov–9 Des | Lihat jadwal B0–B4 di §7.6 | Swagger `/docs` lengkap, pytest hijau, 12 E2E lulus di mode live |
+| 4. Buffer | 10–14 Des | Bug fix, naskah demo, screenshot Swagger untuk slide 41-43, QR | Gladi demo 2x tanpa error |
 
 ## 11. Skenario demo
 
