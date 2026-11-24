@@ -27,6 +27,7 @@ tags:
   - name: "Utility: Media Storage"
   - name: "Utility: AI Classification"
   - name: "Utility: Notification"
+  - name: Dev (demo)
 
 paths:
   /auth/demo-accounts:
@@ -149,10 +150,12 @@ paths:
     post:
       tags: ["Task: Handle Maintenance Request"]
       operationId: buatEstimasi
-      summary: Cari teknisi terverifikasi terdekat, hitung estimasi biaya, lalu sajikan ke pemilik (dashboard + WA)
+      summary: Cari ulang teknisi dan hitung estimasi biaya (fallback bila estimasi otomatis belum terbentuk)
       description: |
-        Orkestrasi Get Tiket, Get Teknisi Tersedia, Get Status Verifikasi Teknisi, Match Teknisi (Micro),
-        Estimate Biaya (Micro), lalu Notification ke pemilik. Hanya untuk tiket berstatus "diklasifikasi".
+        Normalnya HMR menjalankan orkestrasi ini otomatis setelah tiket diklasifikasi (POST /hmr/keluhan
+        dan /klasifikasi-ulang), sesuai BPMN Repair Verification. Endpoint ini dipakai pemilik bila saat itu
+        belum ada teknisi yang cocok. Orkestrasi: Get Tiket, Get Teknisi Tersedia, Get Status Verifikasi Teknisi,
+        Match Teknisi (Micro), Estimate Biaya (Micro), lalu Notification ke pemilik. Hanya untuk tiket berstatus "diklasifikasi".
       parameters:
         - $ref: "#/components/parameters/IdTiket"
       responses:
@@ -511,6 +514,20 @@ paths:
                 type: array
                 items: { $ref: "#/components/schemas/Notifikasi" }
 
+  /dev/reset:
+    post:
+      tags: [Dev (demo)]
+      operationId: resetDemo
+      security: []
+      summary: Kembalikan semua data ke kondisi awal demo
+      description: Hanya tersedia saat backend berjalan dengan DEMO_MODE=true. Dipakai tombol "Reset data demo" di mode live.
+      responses:
+        "200":
+          description: Data demo diisi ulang
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ResetResponse" }
+
 components:
   securitySchemes:
     bearerAuth:
@@ -543,6 +560,12 @@ components:
           schema: { $ref: "#/components/schemas/ErrorResponse" }
 
   schemas:
+    ResetResponse:
+      type: object
+      required: [ok]
+      properties:
+        ok: { type: boolean }
+
     Role:
       type: string
       enum: [penghuni, pemilik, teknisi]
