@@ -57,7 +57,7 @@ export function AppHeader({
         <div className="ml-auto flex items-center gap-2.5">
           {actions}
           <div className="flex items-center gap-2.5 rounded-full bg-white/10 p-1 sm:pr-3.5">
-            <AstronotAvatar suasana={pengguna.role === "pemilik" ? "pemilik" : "senang"} className="size-9 shrink-0" />
+            <AstronotAvatar suasana={pengguna.role === "penghuni" ? "senang" : pengguna.role} className="size-9 shrink-0" />
             <span className="hidden flex-col leading-tight sm:flex">
               <span className="text-sm font-bold">{pengguna.nama}</span>
               <span className="text-xs text-hero-sub capitalize">{pengguna.role}</span>

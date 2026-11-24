@@ -4,7 +4,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useRouter } from "next/navigation";
 import { sessionStore } from "@/lib/session";
 import { api, unwrap } from "./client";
-import type { TiketDetail, TraceStep, UbahStatusRequest } from "./types";
+import type { LogRequest, MetodePembayaran, TiketDetail, UbahStatusRequest, WorkOrder } from "./types";
 
 /** Semua query key di satu tempat supaya invalidasi konsisten. */
 export const qk = {
@@ -13,7 +13,13 @@ export const qk = {
   tiketList: ["tiket"] as const,
   tiket: (id: number) => ["tiket", id] as const,
   notifikasi: ["notifikasi"] as const,
-  trace: (idTiket: number) => ["trace", idTiket] as const,
+  estimasi: (idTiket: number) => ["estimasi", idTiket] as const,
+  workOrderList: ["work-order"] as const,
+  workOrderTiket: (idTiket: number) => ["work-order", "tiket", idTiket] as const,
+  workOrder: (id: number) => ["work-order", id] as const,
+  invoiceList: ["invoice"] as const,
+  invoice: (id: number) => ["invoice", id] as const,
+  laporanKas: ["laporan-kas"] as const,
 };
 
 /* ---------- Auth (demo) ---------- */
@@ -74,15 +80,6 @@ export function useTiketDetail(idTiket: number) {
   });
 }
 
-/** Trace hanya ada di response ajukanKeluhan, jadi disimpan di cache setelah submit. */
-export function useTraceTiket(idTiket: number) {
-  return useQuery<TraceStep[] | null>({
-    queryKey: qk.trace(idTiket),
-    queryFn: () => null,
-    staleTime: Infinity,
-  });
-}
-
 /* ---------- Utility: Notification ---------- */
 
 export function useNotifikasi() {
@@ -114,7 +111,6 @@ export function useAjukanKeluhan() {
     onSuccess: (res) => {
       if (res.tiket) {
         queryClient.setQueryData(qk.tiket(res.tiket.id), res.tiket);
-        queryClient.setQueryData(qk.trace(res.tiket.id), res.trace);
       }
       void queryClient.invalidateQueries({ queryKey: qk.tiketList, exact: true });
       void queryClient.invalidateQueries({ queryKey: qk.notifikasi });
@@ -154,4 +150,213 @@ export function useKlasifikasiUlang() {
       }),
     ),
   );
+}
+
+/* ===================================================================== */
+/* Repair Verification                                                    */
+/* ===================================================================== */
+
+export function useEstimasiTiket(idTiket: number) {
+  return useQuery({
+    queryKey: qk.estimasi(idTiket),
+    queryFn: async () =>
+      unwrap(await api.GET("/hmr/tiket/{id_tiket}/estimasi", { params: { path: { id_tiket: idTiket } } })),
+    enabled: Number.isFinite(idTiket),
+  });
+}
+
+/** Work order sebuah tiket (paling baru), atau null bila belum ada. */
+export function useWorkOrderTiket(idTiket: number) {
+  return useQuery({
+    queryKey: qk.workOrderTiket(idTiket),
+    queryFn: async () =>
+      unwrap(await api.GET("/work-order", { params: { query: { id_tiket: idTiket } } }))[0] ?? null,
+    enabled: Number.isFinite(idTiket),
+    refetchInterval: 10_000,
+  });
+}
+
+export function useWorkOrderList() {
+  return useQuery({
+    queryKey: qk.workOrderList,
+    queryFn: async () => unwrap(await api.GET("/work-order")),
+    refetchInterval: 10_000,
+  });
+}
+
+export function useWorkOrder(id: number) {
+  return useQuery({
+    queryKey: qk.workOrder(id),
+    queryFn: async () =>
+      unwrap(await api.GET("/work-order/{id_work_order}", { params: { path: { id_work_order: id } } })),
+    enabled: Number.isFinite(id),
+  });
+}
+
+/** Setelah mutasi perbaikan: segarkan semua data yang ikut berubah lintas service. */
+function useSegarkanPerbaikan() {
+  const queryClient = useQueryClient();
+  return (wo: WorkOrder | null, idTiket?: number) => {
+    if (wo) {
+      queryClient.setQueryData(qk.workOrder(wo.id), wo);
+      queryClient.setQueryData(qk.workOrderTiket(wo.id_tiket), wo);
+    }
+    const tiket = idTiket ?? wo?.id_tiket;
+    if (tiket !== undefined) {
+      void queryClient.invalidateQueries({ queryKey: qk.tiket(tiket) });
+      void queryClient.invalidateQueries({ queryKey: qk.estimasi(tiket) });
+    }
+    for (const key of [qk.tiketList, qk.workOrderList, qk.invoiceList, qk.notifikasi, qk.laporanKas]) {
+      void queryClient.invalidateQueries({ queryKey: key, exact: key !== qk.workOrderList && key !== qk.invoiceList });
+    }
+  };
+}
+
+export function useBuatEstimasi() {
+  const queryClient = useQueryClient();
+  const segarkan = useSegarkanPerbaikan();
+  return useMutation({
+    mutationFn: async (idTiket: number) =>
+      unwrap(await api.POST("/hmr/tiket/{id_tiket}/estimasi", { params: { path: { id_tiket: idTiket } } })),
+    onSuccess: (res) => {
+      queryClient.setQueryData(qk.estimasi(res.estimasi.id_tiket), res.estimasi);
+      segarkan(null, res.estimasi.id_tiket);
+    },
+  });
+}
+
+export function usePersetujuanBiaya() {
+  const queryClient = useQueryClient();
+  const segarkan = useSegarkanPerbaikan();
+  return useMutation({
+    mutationFn: async (vars: { idEstimasi: number; disetujui: boolean }) =>
+      unwrap(
+        await api.POST("/hmr/estimasi/{id_estimasi}/persetujuan", {
+          params: { path: { id_estimasi: vars.idEstimasi } },
+          body: { disetujui: vars.disetujui },
+        }),
+      ),
+    onSuccess: (res) => {
+      queryClient.setQueryData(qk.estimasi(res.estimasi.id_tiket), res.estimasi);
+      queryClient.setQueryData(qk.tiket(res.tiket.id), res.tiket);
+      if (!res.work_order) queryClient.setQueryData(qk.workOrderTiket(res.tiket.id), null);
+      segarkan(res.work_order, res.tiket.id);
+    },
+  });
+}
+
+export function useKonfirmasiJadwal() {
+  const segarkan = useSegarkanPerbaikan();
+  return useMutation({
+    mutationFn: async (vars: { idWo: number; jadwal: string }) =>
+      unwrap(
+        await api.POST("/hmr/work-order/{id_work_order}/jadwal", {
+          params: { path: { id_work_order: vars.idWo } },
+          body: { jadwal: vars.jadwal },
+        }),
+      ),
+    onSuccess: (wo) => segarkan(wo),
+  });
+}
+
+export function useCatatLog() {
+  const segarkan = useSegarkanPerbaikan();
+  return useMutation({
+    mutationFn: async (vars: { idWo: number } & LogRequest) =>
+      unwrap(
+        await api.POST("/csm/work-order/{id_work_order}/log", {
+          params: { path: { id_work_order: vars.idWo } },
+          body: { aktivitas: vars.aktivitas, catatan: vars.catatan },
+        }),
+      ),
+    onSuccess: (wo) => segarkan(wo),
+  });
+}
+
+export function useUnggahBukti() {
+  const segarkan = useSegarkanPerbaikan();
+  return useMutation({
+    mutationFn: async (vars: { idWo: number; sebelum: File; sesudah: File }) =>
+      unwrap(
+        await api.POST("/csm/work-order/{id_work_order}/bukti", {
+          params: { path: { id_work_order: vars.idWo } },
+          body: { sebelum: "", sesudah: "" },
+          bodySerializer: () => {
+            const form = new FormData();
+            form.append("sebelum", vars.sebelum);
+            form.append("sesudah", vars.sesudah);
+            return form;
+          },
+        }),
+      ),
+    onSuccess: (res) => {
+      segarkan(res.work_order);
+    },
+  });
+}
+
+export function useKonfirmasiSelesai() {
+  const queryClient = useQueryClient();
+  const segarkan = useSegarkanPerbaikan();
+  return useMutation({
+    mutationFn: async (vars: { idWo: number; selesai: boolean; catatan?: string }) =>
+      unwrap(
+        await api.POST("/csm/work-order/{id_work_order}/konfirmasi", {
+          params: { path: { id_work_order: vars.idWo } },
+          body: { selesai: vars.selesai, catatan: vars.catatan },
+        }),
+      ),
+    onSuccess: (res) => {
+      queryClient.setQueryData(qk.tiket(res.tiket.id), res.tiket);
+      if (res.invoice) queryClient.setQueryData(qk.invoice(res.invoice.id), res.invoice);
+      segarkan(res.work_order);
+    },
+  });
+}
+
+/* ===================================================================== */
+/* Billing & Commission                                                   */
+/* ===================================================================== */
+
+export function useInvoiceList() {
+  return useQuery({
+    queryKey: qk.invoiceList,
+    queryFn: async () => unwrap(await api.GET("/invoice")),
+  });
+}
+
+export function useInvoice(id: number) {
+  return useQuery({
+    queryKey: qk.invoice(id),
+    queryFn: async () =>
+      unwrap(await api.GET("/invoice/{id_invoice}", { params: { path: { id_invoice: id } } })),
+    enabled: Number.isFinite(id),
+  });
+}
+
+export function useBayarInvoice() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (vars: { idInvoice: number; metode: MetodePembayaran; simulasiGagal: boolean }) =>
+      unwrap(
+        await api.POST("/csm/invoice/{id_invoice}/bayar", {
+          params: { path: { id_invoice: vars.idInvoice } },
+          body: { metode: vars.metode, simulasi_gagal: vars.simulasiGagal },
+        }),
+      ),
+    onSuccess: (res) => {
+      queryClient.setQueryData(qk.invoice(res.invoice.id), res.invoice);
+      void queryClient.invalidateQueries({ queryKey: qk.invoiceList, exact: true });
+      void queryClient.invalidateQueries({ queryKey: qk.workOrderTiket(res.invoice.id_tiket) });
+      void queryClient.invalidateQueries({ queryKey: qk.notifikasi });
+      void queryClient.invalidateQueries({ queryKey: qk.laporanKas });
+    },
+  });
+}
+
+export function useLaporanKas() {
+  return useQuery({
+    queryKey: qk.laporanKas,
+    queryFn: async () => unwrap(await api.GET("/laporan-kas")),
+  });
 }

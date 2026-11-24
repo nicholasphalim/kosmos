@@ -4,6 +4,7 @@ const TEMA = {
   senang: { latar: "#e4dbff", helm: "#fbf9ff", aksen: "#8a6ff0", visor: "#1b1147", wajah: "#efe8ff", pipi: "#ff9fd0" },
   sedih: { latar: "#fde4e0", helm: "#fff6f4", aksen: "#e5372a", visor: "#4f1016", wajah: "#ffe7e3", pipi: "#ff8f82" },
   pemilik: { latar: "#2f1a63", helm: "#fbf9ff", aksen: "#b9a6f5", visor: "#1b1147", wajah: "#efe8ff", pipi: "#ff9fd0" },
+  teknisi: { latar: "#d4f3e0", helm: "#fbf9ff", aksen: "#1f9d57", visor: "#1b1147", wajah: "#efe8ff", pipi: "#ff9fd0" },
 } as const;
 
 /** Maskot astronot kecil untuk akun penghuni: senang saat sewa aktif, sedih saat sewa berakhir. */

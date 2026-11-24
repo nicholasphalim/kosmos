@@ -1,12 +1,15 @@
 openapi: 3.1.0
 info:
-  title: Kosmos API — Complaint Handling
-  version: 0.1.0
+  title: Kosmos API — Complaint Handling, Repair Verification, Billing & Commission
+  version: 0.2.0
   description: |
-    Kontrak layanan SOAML proses bisnis Complaint Handling.
+    Kontrak layanan SOAML untuk tiga proses bisnis Kosmos.
     Tag menunjukkan layer service hasil Deliverable 1:
-    Task (Handle Maintenance Request), Entity (Tenant and Lease, Complaint Ticket),
+    Task (Handle Maintenance Request, Complete and Settle Maintenance),
+    Micro (Technician Matching, Cost Estimation, Evidence Verification, Commission Calculation),
+    Entity (Tenant and Lease, Complaint Ticket, Technician, Work Order, Invoice, Payment, Financial Ledger),
     Utility (Media Storage, AI Classification, Notification).
+    Microservice dipanggil in-process oleh Task, jadi tidak punya endpoint HTTP sendiri.
     Sumber kebenaran untuk tipe frontend (openapi-typescript) dan implementasi FastAPI.
 servers:
   - url: /api/v1
@@ -15,8 +18,12 @@ security:
 tags:
   - name: Auth (demo)
   - name: "Task: Handle Maintenance Request"
+  - name: "Task: Complete and Settle Maintenance"
   - name: "Entity: Tenant and Lease"
   - name: "Entity: Complaint Ticket"
+  - name: "Entity: Work Order"
+  - name: "Entity: Invoice"
+  - name: "Entity: Financial Ledger"
   - name: "Utility: Media Storage"
   - name: "Utility: AI Classification"
   - name: "Utility: Notification"
@@ -88,7 +95,7 @@ paths:
     post:
       tags: ["Task: Handle Maintenance Request"]
       operationId: ubahStatusTiket
-      summary: Ubah status tiket lalu kirim notifikasi ke penghuni dan pemilik
+      summary: Batalkan tiket (beserta work order yang berjalan) lalu kirim notifikasi ke penghuni dan pemilik
       parameters:
         - $ref: "#/components/parameters/IdTiket"
       requestBody:
@@ -121,6 +128,256 @@ paths:
               schema: { $ref: "#/components/schemas/TiketDetail" }
         "404": { $ref: "#/components/responses/Error" }
         "409": { $ref: "#/components/responses/Error" }
+
+  /hmr/tiket/{id_tiket}/estimasi:
+    get:
+      tags: ["Task: Handle Maintenance Request"]
+      operationId: getEstimasiTiket
+      summary: Get Estimasi Biaya terakhir untuk tiket (null bila belum dicarikan teknisi)
+      parameters:
+        - $ref: "#/components/parameters/IdTiket"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                oneOf:
+                  - $ref: "#/components/schemas/EstimasiBiaya"
+                  - type: "null"
+        "404": { $ref: "#/components/responses/Error" }
+    post:
+      tags: ["Task: Handle Maintenance Request"]
+      operationId: buatEstimasi
+      summary: Cari teknisi terverifikasi terdekat, hitung estimasi biaya, lalu sajikan ke pemilik (dashboard + WA)
+      description: |
+        Orkestrasi Get Tiket, Get Teknisi Tersedia, Get Status Verifikasi Teknisi, Match Teknisi (Micro),
+        Estimate Biaya (Micro), lalu Notification ke pemilik. Hanya untuk tiket berstatus "diklasifikasi".
+      parameters:
+        - $ref: "#/components/parameters/IdTiket"
+      responses:
+        "201":
+          description: Estimasi dibuat dan menunggu persetujuan pemilik
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/EstimasiResponse" }
+        "403": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+        "409": { $ref: "#/components/responses/Error" }
+        "422": { $ref: "#/components/responses/Error" }
+
+  /hmr/estimasi/{id_estimasi}/persetujuan:
+    post:
+      tags: ["Task: Handle Maintenance Request"]
+      operationId: setPersetujuanBiaya
+      summary: Set Persetujuan Biaya. Disetujui membuat work order, ditolak membatalkan perbaikan
+      parameters:
+        - name: id_estimasi
+          in: path
+          required: true
+          schema: { type: integer }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/PersetujuanRequest" }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/PersetujuanResponse" }
+        "403": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+        "409": { $ref: "#/components/responses/Error" }
+
+  /hmr/work-order/{id_work_order}/jadwal:
+    post:
+      tags: ["Task: Handle Maintenance Request"]
+      operationId: konfirmasiJadwal
+      summary: Penghuni mengonfirmasi jadwal kunjungan teknisi (Set Jadwal Kunjungan)
+      parameters:
+        - $ref: "#/components/parameters/IdWorkOrder"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/JadwalRequest" }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/WorkOrder" }
+        "403": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+        "409": { $ref: "#/components/responses/Error" }
+        "422": { $ref: "#/components/responses/Error" }
+
+  /csm/work-order/{id_work_order}/log:
+    post:
+      tags: ["Task: Complete and Settle Maintenance"]
+      operationId: catatLogServis
+      summary: Teknisi mencatat log servis (Add Log Servis) lalu progres dikabarkan
+      parameters:
+        - $ref: "#/components/parameters/IdWorkOrder"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/LogRequest" }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/WorkOrder" }
+        "403": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+        "409": { $ref: "#/components/responses/Error" }
+
+  /csm/work-order/{id_work_order}/bukti:
+    post:
+      tags: ["Task: Complete and Settle Maintenance"]
+      operationId: unggahBukti
+      summary: Teknisi mengunggah foto sebelum dan sesudah, lalu Evidence Verification memeriksanya
+      parameters:
+        - $ref: "#/components/parameters/IdWorkOrder"
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema: { $ref: "#/components/schemas/BuktiRequest" }
+      responses:
+        "200":
+          description: Bukti diperiksa. Lihat field verifikasi.valid
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/BuktiResponse" }
+        "403": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+        "409": { $ref: "#/components/responses/Error" }
+        "422": { $ref: "#/components/responses/Error" }
+
+  /csm/work-order/{id_work_order}/konfirmasi:
+    post:
+      tags: ["Task: Complete and Settle Maintenance"]
+      operationId: setKonfirmasiSelesai
+      summary: Penghuni mengonfirmasi perbaikan selesai. Selesai menutup tiket, menghitung komisi, dan menerbitkan invoice
+      parameters:
+        - $ref: "#/components/parameters/IdWorkOrder"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/KonfirmasiRequest" }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/KonfirmasiResponse" }
+        "403": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+        "409": { $ref: "#/components/responses/Error" }
+
+  /csm/invoice/{id_invoice}/bayar:
+    post:
+      tags: ["Task: Complete and Settle Maintenance"]
+      operationId: bayarInvoice
+      summary: Proses pembayaran via payment gateway, verifikasi, rekonsiliasi, catat ke laporan kas, kirim notifikasi lunas
+      parameters:
+        - $ref: "#/components/parameters/IdInvoice"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/BayarRequest" }
+      responses:
+        "200":
+          description: Hasil pembayaran (berhasil atau gagal)
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/BayarResponse" }
+        "403": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+        "409": { $ref: "#/components/responses/Error" }
+
+  /work-order:
+    get:
+      tags: ["Entity: Work Order"]
+      operationId: listWorkOrder
+      summary: Daftar work order (teknisi miliknya, penghuni unitnya, pemilik propertinya)
+      parameters:
+        - name: id_tiket
+          in: query
+          required: false
+          schema: { type: integer }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/WorkOrder" }
+
+  /work-order/{id_work_order}:
+    get:
+      tags: ["Entity: Work Order"]
+      operationId: getWorkOrder
+      summary: Get Work Order beserta log servis (Get Progress Servis) dan bukti
+      parameters:
+        - $ref: "#/components/parameters/IdWorkOrder"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/WorkOrder" }
+        "404": { $ref: "#/components/responses/Error" }
+
+  /invoice:
+    get:
+      tags: ["Entity: Invoice"]
+      operationId: listInvoice
+      summary: Daftar invoice (penghuni miliknya, pemilik propertinya)
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/Invoice" }
+
+  /invoice/{id_invoice}:
+    get:
+      tags: ["Entity: Invoice"]
+      operationId: getInvoice
+      summary: Get Invoice beserta riwayat percobaan pembayaran
+      parameters:
+        - $ref: "#/components/parameters/IdInvoice"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Invoice" }
+        "404": { $ref: "#/components/responses/Error" }
+
+  /laporan-kas:
+    get:
+      tags: ["Entity: Financial Ledger"]
+      operationId: getLaporanKas
+      summary: Get Laporan Kas pemilik (pemasukan, pembayaran teknisi, komisi)
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/LaporanKas" }
+        "403": { $ref: "#/components/responses/Error" }
 
   /penghuni/me:
     get:
@@ -267,6 +524,16 @@ components:
       in: path
       required: true
       schema: { type: integer }
+    IdWorkOrder:
+      name: id_work_order
+      in: path
+      required: true
+      schema: { type: integer }
+    IdInvoice:
+      name: id_invoice
+      in: path
+      required: true
+      schema: { type: integer }
 
   responses:
     Error:
@@ -278,7 +545,7 @@ components:
   schemas:
     Role:
       type: string
-      enum: [penghuni, pemilik]
+      enum: [penghuni, pemilik, teknisi]
     StatusTiket:
       type: string
       enum: [dibuat, diklasifikasi, diproses, selesai, dibatalkan]
@@ -290,7 +557,7 @@ components:
       enum: [rendah, sedang, tinggi]
     Layer:
       type: string
-      enum: [Task, Entity, Utility]
+      enum: [Task, Micro, Entity, Utility]
 
     ErrorResponse:
       type: object
@@ -319,7 +586,7 @@ components:
         keterangan: { type: string, examples: ["Kos Melati · A-101"] }
         label_sewa:
           type: string
-          enum: [aktif, berakhir, pemilik]
+          enum: [aktif, berakhir, pemilik, teknisi]
         jumlah_properti: { type: [integer, "null"] }
 
     DemoLoginRequest:
@@ -481,11 +748,12 @@ components:
 
     UbahStatusRequest:
       type: object
+      description: Tiket diproses lewat persetujuan estimasi biaya, jadi endpoint ini hanya untuk membatalkan.
       required: [status]
       properties:
         status:
           type: string
-          enum: [diproses, dibatalkan]
+          enum: [dibatalkan]
 
     KlasifikasiRequest:
       type: object
@@ -514,7 +782,22 @@ components:
         kode_tiket: { type: string }
         jenis:
           type: string
-          enum: [tiket_dibuat, diklasifikasi, prioritas_tinggi, diproses, dibatalkan]
+          enum:
+            - tiket_dibuat
+            - diklasifikasi
+            - prioritas_tinggi
+            - diproses
+            - dibatalkan
+            - estimasi
+            - teknisi_ditugaskan
+            - jadwal
+            - progres
+            - bukti_valid
+            - bukti_ditolak
+            - selesai
+            - invoice
+            - lunas
+            - bayar_gagal
         isi: { type: string }
         kanal:
           type: string
@@ -524,3 +807,316 @@ components:
           type: string
           enum: [terkirim, gagal]
         created_at: { type: string, format: date-time }
+
+    StatusWorkOrder:
+      type: string
+      enum: [menunggu_jadwal, dijadwalkan, dikerjakan, menunggu_konfirmasi, selesai, dibatalkan]
+    MetodePembayaran:
+      type: string
+      enum: [qris, va_bca, va_mandiri, gopay]
+
+    RincianBiaya:
+      type: object
+      required: [label, jumlah]
+      properties:
+        label: { type: string, examples: ["Jasa perbaikan listrik"] }
+        jumlah: { type: integer, description: Rupiah }
+
+    TeknisiRingkas:
+      type: object
+      required: [id, nama, keahlian, terverifikasi, rating, no_wa]
+      properties:
+        id: { type: integer }
+        nama: { type: string }
+        keahlian:
+          type: array
+          items: { $ref: "#/components/schemas/Kategori" }
+        terverifikasi: { type: boolean }
+        rating: { type: number }
+        no_wa: { type: string }
+
+    KandidatTeknisi:
+      type: object
+      description: Hasil Technician Matching untuk satu teknisi (lolos atau alasan tidak lolos)
+      required: [teknisi, tersedia, jarak_km, lolos, skor, alasan]
+      properties:
+        teknisi: { $ref: "#/components/schemas/TeknisiRingkas" }
+        tersedia: { type: boolean }
+        jarak_km: { type: number }
+        lolos: { type: boolean }
+        skor: { type: [number, "null"] }
+        alasan: { type: string, examples: ["Belum terverifikasi"] }
+
+    EstimasiBiaya:
+      type: object
+      required: [id, id_tiket, kode_tiket, teknisi, kandidat, rincian, total, status, diputuskan_oleh, diputuskan_at, created_at]
+      properties:
+        id: { type: integer }
+        id_tiket: { type: integer }
+        kode_tiket: { type: string }
+        teknisi: { $ref: "#/components/schemas/TeknisiRingkas" }
+        kandidat:
+          type: array
+          items: { $ref: "#/components/schemas/KandidatTeknisi" }
+        rincian:
+          type: array
+          items: { $ref: "#/components/schemas/RincianBiaya" }
+        total: { type: integer }
+        status:
+          type: string
+          enum: [menunggu, disetujui, ditolak]
+        diputuskan_oleh: { type: [string, "null"] }
+        diputuskan_at: { type: [string, "null"], format: date-time }
+        created_at: { type: string, format: date-time }
+
+    EstimasiResponse:
+      type: object
+      required: [estimasi, trace]
+      properties:
+        estimasi: { $ref: "#/components/schemas/EstimasiBiaya" }
+        trace:
+          type: array
+          items: { $ref: "#/components/schemas/TraceStep" }
+
+    PersetujuanRequest:
+      type: object
+      required: [disetujui]
+      properties:
+        disetujui: { type: boolean }
+
+    PersetujuanResponse:
+      type: object
+      required: [estimasi, tiket, work_order, trace]
+      properties:
+        estimasi: { $ref: "#/components/schemas/EstimasiBiaya" }
+        tiket: { $ref: "#/components/schemas/TiketDetail" }
+        work_order:
+          oneOf:
+            - $ref: "#/components/schemas/WorkOrder"
+            - type: "null"
+        trace:
+          type: array
+          items: { $ref: "#/components/schemas/TraceStep" }
+
+    LogServis:
+      type: object
+      required: [aktivitas, catatan, waktu, oleh]
+      properties:
+        aktivitas:
+          type: string
+          enum: [dibuat, jadwal, tiba, mulai, catatan, bukti_valid, bukti_ditolak, belum_beres, selesai, dibatalkan]
+        catatan: { type: [string, "null"] }
+        waktu: { type: string, format: date-time }
+        oleh: { type: string }
+
+    VerifikasiBukti:
+      type: object
+      required: [valid, skor, pemeriksaan]
+      properties:
+        valid: { type: boolean }
+        skor: { type: number, minimum: 0, maximum: 1 }
+        pemeriksaan:
+          type: array
+          items:
+            type: object
+            required: [label, ok]
+            properties:
+              label: { type: string }
+              ok: { type: boolean }
+
+    WorkOrder:
+      type: object
+      required: [id, kode, id_tiket, kode_tiket, judul, kategori, urgensi, unit, penghuni, teknisi, status, biaya_final, slot_jadwal, jadwal_kunjungan, log, bukti_sebelum, bukti_sesudah, verifikasi, id_invoice, created_at, updated_at]
+      properties:
+        id: { type: integer }
+        kode: { type: string, examples: [WO-0012] }
+        id_tiket: { type: integer }
+        kode_tiket: { type: string }
+        judul: { type: string }
+        kategori:
+          oneOf:
+            - $ref: "#/components/schemas/Kategori"
+            - type: "null"
+        urgensi:
+          oneOf:
+            - $ref: "#/components/schemas/Urgensi"
+            - type: "null"
+        unit: { $ref: "#/components/schemas/UnitRingkas" }
+        penghuni: { $ref: "#/components/schemas/Pengguna" }
+        teknisi: { $ref: "#/components/schemas/TeknisiRingkas" }
+        status: { $ref: "#/components/schemas/StatusWorkOrder" }
+        biaya_final: { type: integer }
+        slot_jadwal:
+          type: array
+          description: Usulan waktu kunjungan yang bisa dipilih penghuni
+          items: { type: string, format: date-time }
+        jadwal_kunjungan: { type: [string, "null"], format: date-time }
+        log:
+          type: array
+          items: { $ref: "#/components/schemas/LogServis" }
+        bukti_sebelum:
+          oneOf:
+            - $ref: "#/components/schemas/Lampiran"
+            - type: "null"
+        bukti_sesudah:
+          oneOf:
+            - $ref: "#/components/schemas/Lampiran"
+            - type: "null"
+        verifikasi:
+          oneOf:
+            - $ref: "#/components/schemas/VerifikasiBukti"
+            - type: "null"
+        id_invoice: { type: [integer, "null"] }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+
+    JadwalRequest:
+      type: object
+      required: [jadwal]
+      properties:
+        jadwal: { type: string, format: date-time }
+
+    LogRequest:
+      type: object
+      required: [aktivitas]
+      properties:
+        aktivitas:
+          type: string
+          enum: [tiba, mulai, catatan]
+        catatan: { type: string, maxLength: 300 }
+
+    BuktiRequest:
+      type: object
+      required: [sebelum, sesudah]
+      properties:
+        sebelum: { type: string, format: binary }
+        sesudah: { type: string, format: binary }
+
+    BuktiResponse:
+      type: object
+      required: [work_order, verifikasi, trace]
+      properties:
+        work_order: { $ref: "#/components/schemas/WorkOrder" }
+        verifikasi: { $ref: "#/components/schemas/VerifikasiBukti" }
+        trace:
+          type: array
+          items: { $ref: "#/components/schemas/TraceStep" }
+
+    KonfirmasiRequest:
+      type: object
+      required: [selesai]
+      properties:
+        selesai: { type: boolean }
+        catatan: { type: string, maxLength: 300 }
+
+    KonfirmasiResponse:
+      type: object
+      required: [work_order, tiket, invoice, trace]
+      properties:
+        work_order: { $ref: "#/components/schemas/WorkOrder" }
+        tiket: { $ref: "#/components/schemas/TiketDetail" }
+        invoice:
+          oneOf:
+            - $ref: "#/components/schemas/Invoice"
+            - type: "null"
+        trace:
+          type: array
+          items: { $ref: "#/components/schemas/TraceStep" }
+
+    Pembayaran:
+      type: object
+      required: [id, ref_gateway, metode, jumlah, status, alasan_gagal, direkonsiliasi, created_at]
+      properties:
+        id: { type: integer }
+        ref_gateway: { type: string, examples: [PG-8F3K2Q] }
+        metode: { $ref: "#/components/schemas/MetodePembayaran" }
+        jumlah: { type: integer }
+        status:
+          type: string
+          enum: [pending, berhasil, gagal]
+        alasan_gagal: { type: [string, "null"] }
+        direkonsiliasi: { type: boolean }
+        created_at: { type: string, format: date-time }
+
+    Invoice:
+      type: object
+      required: [id, kode, id_work_order, id_tiket, kode_tiket, judul, unit, penghuni, teknisi, rincian, biaya, persen_komisi, komisi, total, status, jatuh_tempo, dibayar_at, pembayaran, created_at]
+      properties:
+        id: { type: integer }
+        kode: { type: string, examples: [INV-0012] }
+        id_work_order: { type: integer }
+        id_tiket: { type: integer }
+        kode_tiket: { type: string }
+        judul: { type: string }
+        unit: { $ref: "#/components/schemas/UnitRingkas" }
+        penghuni: { $ref: "#/components/schemas/Pengguna" }
+        teknisi: { type: string }
+        rincian:
+          type: array
+          items: { $ref: "#/components/schemas/RincianBiaya" }
+        biaya: { type: integer, description: Biaya final perbaikan }
+        persen_komisi: { type: number, examples: [10] }
+        komisi: { type: integer, description: Komisi Kosmos, dipotong dari bagian teknisi }
+        total: { type: integer, description: Yang dibayar penghuni }
+        status:
+          type: string
+          enum: [belum_dibayar, lunas]
+        jatuh_tempo: { type: string, format: date }
+        dibayar_at: { type: [string, "null"], format: date-time }
+        pembayaran:
+          type: array
+          items: { $ref: "#/components/schemas/Pembayaran" }
+        created_at: { type: string, format: date-time }
+
+    BayarRequest:
+      type: object
+      required: [metode]
+      properties:
+        metode: { $ref: "#/components/schemas/MetodePembayaran" }
+        simulasi_gagal: { type: boolean, description: Khusus demo, payment gateway mock menolak transaksi }
+
+    BayarResponse:
+      type: object
+      required: [hasil, invoice, pembayaran, alasan, trace]
+      properties:
+        hasil:
+          type: string
+          enum: [berhasil, gagal]
+        invoice: { $ref: "#/components/schemas/Invoice" }
+        pembayaran: { $ref: "#/components/schemas/Pembayaran" }
+        alasan: { type: [string, "null"] }
+        trace:
+          type: array
+          items: { $ref: "#/components/schemas/TraceStep" }
+
+    TransaksiKas:
+      type: object
+      required: [id, waktu, jenis, keterangan, jumlah, ref, properti]
+      properties:
+        id: { type: integer }
+        waktu: { type: string, format: date-time }
+        jenis:
+          type: string
+          enum: [pemasukan, pembayaran_teknisi, komisi]
+        keterangan: { type: string }
+        jumlah: { type: integer, description: Positif masuk, negatif keluar }
+        ref: { type: string, examples: [INV-0012] }
+        properti: { type: string }
+
+    LaporanKas:
+      type: object
+      required: [ringkasan, transaksi]
+      properties:
+        ringkasan:
+          type: object
+          required: [pemasukan, pembayaran_teknisi, komisi, invoice_lunas, invoice_tertunda, nilai_tertunda]
+          properties:
+            pemasukan: { type: integer }
+            pembayaran_teknisi: { type: integer }
+            komisi: { type: integer }
+            invoice_lunas: { type: integer }
+            invoice_tertunda: { type: integer }
+            nilai_tertunda: { type: integer }
+        transaksi:
+          type: array
+          items: { $ref: "#/components/schemas/TransaksiKas" }

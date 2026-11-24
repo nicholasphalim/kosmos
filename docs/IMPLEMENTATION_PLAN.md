@@ -397,6 +397,26 @@ QR code untuk slide 44 mengarah ke URL Vercel.
 3. **Pak Hendra** membuka dashboard, memfilter urgensi tinggi, lalu menekan "Tandai diproses". Status berubah dan notifikasi terkirim ke kedua pihak.
 4. (Opsional) Simulasi AI gagal: tiket tetap dibuat, lalu klasifikasi ulang berhasil.
 
+## 11b. Repair Verification dan Billing & Commission (frontend mock, 24 Nov 2026)
+
+Dua proses lanjutan sudah diprototype di frontend mode mock dengan pola yang sama (kontrak OpenAPI → MSW → service per layer).
+
+| Layer | Service | Operasi (D1) | Endpoint |
+|---|---|---|---|
+| Task | Handle Maintenance Request | Get Estimasi Biaya, Set Persetujuan Biaya, Set Jadwal Kunjungan | `GET/POST /hmr/tiket/{id}/estimasi`, `POST /hmr/estimasi/{id}/persetujuan`, `POST /hmr/work-order/{id}/jadwal` |
+| Task | Complete and Settle Maintenance | Add Log Servis, unggah bukti, Set Konfirmasi Selesai, bayar | `POST /csm/work-order/{id}/log`, `/bukti`, `/konfirmasi`, `POST /csm/invoice/{id}/bayar` |
+| Micro | Technician Matching, Cost Estimation, Evidence Verification, Commission Calculation | Match Teknisi, Estimate Biaya, Verify Bukti, Calculate Komisi | Tanpa endpoint (dipanggil in-process oleh Task), `frontend/src/mocks/micro.ts` |
+| Entity | Technician, Work Order, Invoice, Payment, Financial Ledger | Get Teknisi Tersedia, Add Work Order, Add Invoice, Process Payment, Add Transaksi Kas, dst. | `GET /work-order`, `GET /invoice`, `GET /laporan-kas` |
+
+Keputusan desain yang perlu disepakati kelompok:
+1. **Tiket diproses lewat persetujuan estimasi.** Tombol "Tandai diproses" dihapus. `POST /hmr/tiket/{id}/status` kini hanya menerima `dibatalkan`, dan pembatalan ikut membatalkan work order yang berjalan.
+2. **Catatan estimasi dimiliki Task HMR**, karena Get Estimasi Biaya dan Set Persetujuan Biaya non-agnostic menurut D1. Microservice Cost Estimation tetap stateless.
+3. **Penghuni membayar biaya perbaikan** (sesuai BPMN Billing). Komisi Kosmos 10% dipotong dari bagian teknisi, bukan biaya tambahan. Laporan kas pemilik mencatat tiga baris per pembayaran: pemasukan, diteruskan ke teknisi, komisi. Ini sekaligus jawaban sementara untuk pertanyaan terbuka #3.
+4. **Role teknisi** ditambahkan (`Role = penghuni | pemilik | teknisi`) karena teknisi adalah participant di SoaML Repair Verification.
+5. **Work order** punya state machine sendiri: `menunggu_jadwal → dijadwalkan → dikerjakan → menunggu_konfirmasi → selesai`, dengan `menunggu_konfirmasi → dikerjakan` bila penghuni menandai belum beres.
+6. Evidence Verification versi mock memeriksa metadata (dua foto, format gambar, tidak identik, ukuran ≥ 1 KB). Versi akhir bisa memakai LLM vision seperti AI Classification.
+7. Payment gateway memakai adapter mock. Kegagalan bisa disimulasikan dari UI (checkbox demo) untuk menunjukkan cabang "Pembayaran berhasil? Tidak" di BPMN.
+
 ## 12. Pertanyaan terbuka untuk kelompok
 
 1. Setujui penyimpangan desain di §2, lalu perbaiki slide D2 yang terkait:

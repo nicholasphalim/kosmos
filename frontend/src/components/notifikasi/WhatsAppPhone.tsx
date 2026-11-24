@@ -1,5 +1,21 @@
 import { clsx } from "clsx";
-import { CheckCheck, FilePlus, Sparkles, Wrench, X, Zap, type IkonKosmos } from "@/components/icons";
+import {
+  CalendarCheck,
+  Camera,
+  Check,
+  CheckCheck,
+  FilePlus,
+  HardHat,
+  Receipt,
+  ShieldCheck,
+  Sparkles,
+  TriangleExclamationPoint,
+  Wallet,
+  Wrench,
+  X,
+  Zap,
+  type IkonKosmos,
+} from "@/components/icons";
 import { useEffect, useRef } from "react";
 import { LogoMark } from "@/components/brand/Logo";
 import type { Notifikasi } from "@/lib/api/types";
@@ -11,6 +27,16 @@ const JENIS: Record<Notifikasi["jenis"], { label: string; icon: IkonKosmos; warn
   prioritas_tinggi: { label: "Prioritas TINGGI", icon: Zap, warna: "text-danger" },
   diproses: { label: "Diproses", icon: Wrench, warna: "text-violet" },
   dibatalkan: { label: "Dibatalkan", icon: X, warna: "text-muted" },
+  estimasi: { label: "Estimasi biaya", icon: Receipt, warna: "text-violet" },
+  teknisi_ditugaskan: { label: "Teknisi ditugaskan", icon: HardHat, warna: "text-wa" },
+  jadwal: { label: "Jadwal kunjungan", icon: CalendarCheck, warna: "text-wa" },
+  progres: { label: "Progres servis", icon: Wrench, warna: "text-violet" },
+  bukti_valid: { label: "Bukti terverifikasi", icon: ShieldCheck, warna: "text-wa" },
+  bukti_ditolak: { label: "Bukti ditolak", icon: Camera, warna: "text-danger" },
+  selesai: { label: "Selesai", icon: Check, warna: "text-wa" },
+  invoice: { label: "Tagihan baru", icon: Receipt, warna: "text-violet" },
+  lunas: { label: "Lunas", icon: Wallet, warna: "text-wa" },
+  bayar_gagal: { label: "Pembayaran gagal", icon: TriangleExclamationPoint, warna: "text-danger" },
 };
 
 /**

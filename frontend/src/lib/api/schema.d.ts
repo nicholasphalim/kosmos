@@ -68,7 +68,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Ubah status tiket lalu kirim notifikasi ke penghuni dan pemilik */
+        /** Batalkan tiket (beserta work order yang berjalan) lalu kirim notifikasi ke penghuni dan pemilik */
         post: operations["ubahStatusTiket"];
         delete?: never;
         options?: never;
@@ -87,6 +87,215 @@ export interface paths {
         put?: never;
         /** Jalankan ulang klasifikasi AI untuk tiket berstatus "dibuat" */
         post: operations["klasifikasiUlang"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/hmr/tiket/{id_tiket}/estimasi": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Estimasi Biaya terakhir untuk tiket (null bila belum dicarikan teknisi) */
+        get: operations["getEstimasiTiket"];
+        put?: never;
+        /**
+         * Cari teknisi terverifikasi terdekat, hitung estimasi biaya, lalu sajikan ke pemilik (dashboard + WA)
+         * @description Orkestrasi Get Tiket, Get Teknisi Tersedia, Get Status Verifikasi Teknisi, Match Teknisi (Micro),
+         *     Estimate Biaya (Micro), lalu Notification ke pemilik. Hanya untuk tiket berstatus "diklasifikasi".
+         */
+        post: operations["buatEstimasi"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/hmr/estimasi/{id_estimasi}/persetujuan": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Set Persetujuan Biaya. Disetujui membuat work order, ditolak membatalkan perbaikan */
+        post: operations["setPersetujuanBiaya"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/hmr/work-order/{id_work_order}/jadwal": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Penghuni mengonfirmasi jadwal kunjungan teknisi (Set Jadwal Kunjungan) */
+        post: operations["konfirmasiJadwal"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/csm/work-order/{id_work_order}/log": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Teknisi mencatat log servis (Add Log Servis) lalu progres dikabarkan */
+        post: operations["catatLogServis"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/csm/work-order/{id_work_order}/bukti": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Teknisi mengunggah foto sebelum dan sesudah, lalu Evidence Verification memeriksanya */
+        post: operations["unggahBukti"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/csm/work-order/{id_work_order}/konfirmasi": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Penghuni mengonfirmasi perbaikan selesai. Selesai menutup tiket, menghitung komisi, dan menerbitkan invoice */
+        post: operations["setKonfirmasiSelesai"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/csm/invoice/{id_invoice}/bayar": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Proses pembayaran via payment gateway, verifikasi, rekonsiliasi, catat ke laporan kas, kirim notifikasi lunas */
+        post: operations["bayarInvoice"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/work-order": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Daftar work order (teknisi miliknya, penghuni unitnya, pemilik propertinya) */
+        get: operations["listWorkOrder"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/work-order/{id_work_order}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Work Order beserta log servis (Get Progress Servis) dan bukti */
+        get: operations["getWorkOrder"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/invoice": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Daftar invoice (penghuni miliknya, pemilik propertinya) */
+        get: operations["listInvoice"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/invoice/{id_invoice}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Invoice beserta riwayat percobaan pembayaran */
+        get: operations["getInvoice"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/laporan-kas": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Laporan Kas pemilik (pemasukan, pembayaran teknisi, komisi) */
+        get: operations["getLaporanKas"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -234,7 +443,7 @@ export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
         /** @enum {string} */
-        Role: "penghuni" | "pemilik";
+        Role: "penghuni" | "pemilik" | "teknisi";
         /** @enum {string} */
         StatusTiket: "dibuat" | "diklasifikasi" | "diproses" | "selesai" | "dibatalkan";
         /** @enum {string} */
@@ -242,7 +451,7 @@ export interface components {
         /** @enum {string} */
         Urgensi: "rendah" | "sedang" | "tinggi";
         /** @enum {string} */
-        Layer: "Task" | "Entity" | "Utility";
+        Layer: "Task" | "Micro" | "Entity" | "Utility";
         ErrorResponse: {
             error: {
                 /** @example SEWA_TIDAK_AKTIF */
@@ -260,7 +469,7 @@ export interface components {
             /** @example Kos Melati · A-101 */
             keterangan: string;
             /** @enum {string} */
-            label_sewa: "aktif" | "berakhir" | "pemilik";
+            label_sewa: "aktif" | "berakhir" | "pemilik" | "teknisi";
             jumlah_properti?: number | null;
         };
         DemoLoginRequest: {
@@ -375,9 +584,10 @@ export interface components {
             warning: string | null;
             trace: components["schemas"]["TraceStep"][];
         };
+        /** @description Tiket diproses lewat persetujuan estimasi biaya, jadi endpoint ini hanya untuk membatalkan. */
         UbahStatusRequest: {
             /** @enum {string} */
-            status: "diproses" | "dibatalkan";
+            status: "dibatalkan";
         };
         KlasifikasiRequest: {
             teks: string;
@@ -395,7 +605,7 @@ export interface components {
             id: number;
             kode_tiket: string;
             /** @enum {string} */
-            jenis: "tiket_dibuat" | "diklasifikasi" | "prioritas_tinggi" | "diproses" | "dibatalkan";
+            jenis: "tiket_dibuat" | "diklasifikasi" | "prioritas_tinggi" | "diproses" | "dibatalkan" | "estimasi" | "teknisi_ditugaskan" | "jadwal" | "progres" | "bukti_valid" | "bukti_ditolak" | "selesai" | "invoice" | "lunas" | "bayar_gagal";
             isi: string;
             /** @enum {string} */
             kanal: "whatsapp";
@@ -404,6 +614,217 @@ export interface components {
             status_kirim: "terkirim" | "gagal";
             /** Format: date-time */
             created_at: string;
+        };
+        /** @enum {string} */
+        StatusWorkOrder: "menunggu_jadwal" | "dijadwalkan" | "dikerjakan" | "menunggu_konfirmasi" | "selesai" | "dibatalkan";
+        /** @enum {string} */
+        MetodePembayaran: "qris" | "va_bca" | "va_mandiri" | "gopay";
+        RincianBiaya: {
+            /** @example Jasa perbaikan listrik */
+            label: string;
+            /** @description Rupiah */
+            jumlah: number;
+        };
+        TeknisiRingkas: {
+            id: number;
+            nama: string;
+            keahlian: components["schemas"]["Kategori"][];
+            terverifikasi: boolean;
+            rating: number;
+            no_wa: string;
+        };
+        /** @description Hasil Technician Matching untuk satu teknisi (lolos atau alasan tidak lolos) */
+        KandidatTeknisi: {
+            teknisi: components["schemas"]["TeknisiRingkas"];
+            tersedia: boolean;
+            jarak_km: number;
+            lolos: boolean;
+            skor: number | null;
+            /** @example Belum terverifikasi */
+            alasan: string;
+        };
+        EstimasiBiaya: {
+            id: number;
+            id_tiket: number;
+            kode_tiket: string;
+            teknisi: components["schemas"]["TeknisiRingkas"];
+            kandidat: components["schemas"]["KandidatTeknisi"][];
+            rincian: components["schemas"]["RincianBiaya"][];
+            total: number;
+            /** @enum {string} */
+            status: "menunggu" | "disetujui" | "ditolak";
+            diputuskan_oleh: string | null;
+            /** Format: date-time */
+            diputuskan_at: string | null;
+            /** Format: date-time */
+            created_at: string;
+        };
+        EstimasiResponse: {
+            estimasi: components["schemas"]["EstimasiBiaya"];
+            trace: components["schemas"]["TraceStep"][];
+        };
+        PersetujuanRequest: {
+            disetujui: boolean;
+        };
+        PersetujuanResponse: {
+            estimasi: components["schemas"]["EstimasiBiaya"];
+            tiket: components["schemas"]["TiketDetail"];
+            work_order: components["schemas"]["WorkOrder"] | null;
+            trace: components["schemas"]["TraceStep"][];
+        };
+        LogServis: {
+            /** @enum {string} */
+            aktivitas: "dibuat" | "jadwal" | "tiba" | "mulai" | "catatan" | "bukti_valid" | "bukti_ditolak" | "belum_beres" | "selesai" | "dibatalkan";
+            catatan: string | null;
+            /** Format: date-time */
+            waktu: string;
+            oleh: string;
+        };
+        VerifikasiBukti: {
+            valid: boolean;
+            skor: number;
+            pemeriksaan: {
+                label: string;
+                ok: boolean;
+            }[];
+        };
+        WorkOrder: {
+            id: number;
+            /** @example WO-0012 */
+            kode: string;
+            id_tiket: number;
+            kode_tiket: string;
+            judul: string;
+            kategori: components["schemas"]["Kategori"] | null;
+            urgensi: components["schemas"]["Urgensi"] | null;
+            unit: components["schemas"]["UnitRingkas"];
+            penghuni: components["schemas"]["Pengguna"];
+            teknisi: components["schemas"]["TeknisiRingkas"];
+            status: components["schemas"]["StatusWorkOrder"];
+            biaya_final: number;
+            /** @description Usulan waktu kunjungan yang bisa dipilih penghuni */
+            slot_jadwal: string[];
+            /** Format: date-time */
+            jadwal_kunjungan: string | null;
+            log: components["schemas"]["LogServis"][];
+            bukti_sebelum: components["schemas"]["Lampiran"] | null;
+            bukti_sesudah: components["schemas"]["Lampiran"] | null;
+            verifikasi: components["schemas"]["VerifikasiBukti"] | null;
+            id_invoice: number | null;
+            /** Format: date-time */
+            created_at: string;
+            /** Format: date-time */
+            updated_at: string;
+        };
+        JadwalRequest: {
+            /** Format: date-time */
+            jadwal: string;
+        };
+        LogRequest: {
+            /** @enum {string} */
+            aktivitas: "tiba" | "mulai" | "catatan";
+            catatan?: string;
+        };
+        BuktiRequest: {
+            /** Format: binary */
+            sebelum: string;
+            /** Format: binary */
+            sesudah: string;
+        };
+        BuktiResponse: {
+            work_order: components["schemas"]["WorkOrder"];
+            verifikasi: components["schemas"]["VerifikasiBukti"];
+            trace: components["schemas"]["TraceStep"][];
+        };
+        KonfirmasiRequest: {
+            selesai: boolean;
+            catatan?: string;
+        };
+        KonfirmasiResponse: {
+            work_order: components["schemas"]["WorkOrder"];
+            tiket: components["schemas"]["TiketDetail"];
+            invoice: components["schemas"]["Invoice"] | null;
+            trace: components["schemas"]["TraceStep"][];
+        };
+        Pembayaran: {
+            id: number;
+            /** @example PG-8F3K2Q */
+            ref_gateway: string;
+            metode: components["schemas"]["MetodePembayaran"];
+            jumlah: number;
+            /** @enum {string} */
+            status: "pending" | "berhasil" | "gagal";
+            alasan_gagal: string | null;
+            direkonsiliasi: boolean;
+            /** Format: date-time */
+            created_at: string;
+        };
+        Invoice: {
+            id: number;
+            /** @example INV-0012 */
+            kode: string;
+            id_work_order: number;
+            id_tiket: number;
+            kode_tiket: string;
+            judul: string;
+            unit: components["schemas"]["UnitRingkas"];
+            penghuni: components["schemas"]["Pengguna"];
+            teknisi: string;
+            rincian: components["schemas"]["RincianBiaya"][];
+            /** @description Biaya final perbaikan */
+            biaya: number;
+            /** @example 10 */
+            persen_komisi: number;
+            /** @description Komisi Kosmos */
+            komisi: number;
+            /** @description Yang dibayar penghuni */
+            total: number;
+            /** @enum {string} */
+            status: "belum_dibayar" | "lunas";
+            /** Format: date */
+            jatuh_tempo: string;
+            /** Format: date-time */
+            dibayar_at: string | null;
+            pembayaran: components["schemas"]["Pembayaran"][];
+            /** Format: date-time */
+            created_at: string;
+        };
+        BayarRequest: {
+            metode: components["schemas"]["MetodePembayaran"];
+            /** @description Khusus demo */
+            simulasi_gagal?: boolean;
+        };
+        BayarResponse: {
+            /** @enum {string} */
+            hasil: "berhasil" | "gagal";
+            invoice: components["schemas"]["Invoice"];
+            pembayaran: components["schemas"]["Pembayaran"];
+            alasan: string | null;
+            trace: components["schemas"]["TraceStep"][];
+        };
+        TransaksiKas: {
+            id: number;
+            /** Format: date-time */
+            waktu: string;
+            /** @enum {string} */
+            jenis: "pemasukan" | "pembayaran_teknisi" | "komisi";
+            keterangan: string;
+            /** @description Positif masuk */
+            jumlah: number;
+            /** @example INV-0012 */
+            ref: string;
+            properti: string;
+        };
+        LaporanKas: {
+            ringkasan: {
+                pemasukan: number;
+                pembayaran_teknisi: number;
+                komisi: number;
+                invoice_lunas: number;
+                invoice_tertunda: number;
+                nilai_tertunda: number;
+            };
+            transaksi: components["schemas"]["TransaksiKas"][];
         };
     };
     responses: {
@@ -419,6 +840,8 @@ export interface components {
     };
     parameters: {
         IdTiket: number;
+        IdWorkOrder: number;
+        IdInvoice: number;
     };
     requestBodies: never;
     headers: never;
@@ -558,6 +981,340 @@ export interface operations {
             };
             404: components["responses"]["Error"];
             409: components["responses"]["Error"];
+        };
+    };
+    getEstimasiTiket: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id_tiket: components["parameters"]["IdTiket"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EstimasiBiaya"] | null;
+                };
+            };
+            404: components["responses"]["Error"];
+        };
+    };
+    buatEstimasi: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id_tiket: components["parameters"]["IdTiket"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Estimasi dibuat dan menunggu persetujuan pemilik */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EstimasiResponse"];
+                };
+            };
+            403: components["responses"]["Error"];
+            404: components["responses"]["Error"];
+            409: components["responses"]["Error"];
+            422: components["responses"]["Error"];
+        };
+    };
+    setPersetujuanBiaya: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id_estimasi: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PersetujuanRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PersetujuanResponse"];
+                };
+            };
+            403: components["responses"]["Error"];
+            404: components["responses"]["Error"];
+            409: components["responses"]["Error"];
+        };
+    };
+    konfirmasiJadwal: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id_work_order: components["parameters"]["IdWorkOrder"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["JadwalRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkOrder"];
+                };
+            };
+            403: components["responses"]["Error"];
+            404: components["responses"]["Error"];
+            409: components["responses"]["Error"];
+            422: components["responses"]["Error"];
+        };
+    };
+    catatLogServis: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id_work_order: components["parameters"]["IdWorkOrder"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["LogRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkOrder"];
+                };
+            };
+            403: components["responses"]["Error"];
+            404: components["responses"]["Error"];
+            409: components["responses"]["Error"];
+        };
+    };
+    unggahBukti: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id_work_order: components["parameters"]["IdWorkOrder"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "multipart/form-data": components["schemas"]["BuktiRequest"];
+            };
+        };
+        responses: {
+            /** @description Bukti diperiksa. Lihat field verifikasi.valid */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BuktiResponse"];
+                };
+            };
+            403: components["responses"]["Error"];
+            404: components["responses"]["Error"];
+            409: components["responses"]["Error"];
+            422: components["responses"]["Error"];
+        };
+    };
+    setKonfirmasiSelesai: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id_work_order: components["parameters"]["IdWorkOrder"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["KonfirmasiRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["KonfirmasiResponse"];
+                };
+            };
+            403: components["responses"]["Error"];
+            404: components["responses"]["Error"];
+            409: components["responses"]["Error"];
+        };
+    };
+    bayarInvoice: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id_invoice: components["parameters"]["IdInvoice"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BayarRequest"];
+            };
+        };
+        responses: {
+            /** @description Hasil pembayaran (berhasil atau gagal) */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BayarResponse"];
+                };
+            };
+            403: components["responses"]["Error"];
+            404: components["responses"]["Error"];
+            409: components["responses"]["Error"];
+        };
+    };
+    listWorkOrder: {
+        parameters: {
+            query?: {
+                id_tiket?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkOrder"][];
+                };
+            };
+        };
+    };
+    getWorkOrder: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id_work_order: components["parameters"]["IdWorkOrder"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkOrder"];
+                };
+            };
+            404: components["responses"]["Error"];
+        };
+    };
+    listInvoice: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Invoice"][];
+                };
+            };
+        };
+    };
+    getInvoice: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id_invoice: components["parameters"]["IdInvoice"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Invoice"];
+                };
+            };
+            404: components["responses"]["Error"];
+        };
+    };
+    getLaporanKas: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LaporanKas"];
+                };
+            };
+            403: components["responses"]["Error"];
         };
     };
     getPenghuniSaya: {

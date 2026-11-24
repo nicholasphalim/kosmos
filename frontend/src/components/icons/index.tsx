@@ -33,6 +33,11 @@ function ikon(nama: string): IkonKosmos {
 export const ArrowDown = ikon("arrow-down");
 export const ArrowLeft = ikon("arrow-left");
 export const Building = ikon("building");
+export const CalendarCheck = ikon("calendar-check");
+export const CreditCard = ikon("credit-card");
+export const HardHat = ikon("hard-hat");
+export const Receipt = ikon("receipt");
+export const Wallet = ikon("wallet");
 export const Building2 = ikon("building");
 export const CalendarX = ikon("calendar-x");
 export const Camera = ikon("camera");

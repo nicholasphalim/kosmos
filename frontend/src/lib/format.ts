@@ -1,4 +1,4 @@
-import type { Kategori, StatusTiket, TiketRingkas, Urgensi } from "./api/types";
+import type { Kategori, LogServis, MetodePembayaran, StatusTiket, StatusWorkOrder, TiketRingkas, Urgensi } from "./api/types";
 
 export const LABEL_KATEGORI: Record<Kategori, string> = {
   AC: "AC",
@@ -88,3 +88,51 @@ export function ukuranFile(byte: number): string {
 export function formatDurasi(ms: number): string {
   return ms >= 1000 ? `${(ms / 1000).toFixed(2)} s` : `${Math.round(ms)} ms`;
 }
+
+/* ---------- Repair Verification & Billing ---------- */
+
+const rp = new Intl.NumberFormat("id-ID", { style: "currency", currency: "IDR", maximumFractionDigits: 0 });
+
+/** "Rp 285.000". Angka negatif ditulis "−Rp 25.000". */
+export function rupiah(n: number): string {
+  const s = rp.format(Math.abs(n)).replace(/ /g, " ");
+  return n < 0 ? `−${s}` : s;
+}
+
+export const LABEL_STATUS_WO: Record<StatusWorkOrder, string> = {
+  menunggu_jadwal: "Menunggu jadwal",
+  dijadwalkan: "Dijadwalkan",
+  dikerjakan: "Dikerjakan",
+  menunggu_konfirmasi: "Menunggu konfirmasi",
+  selesai: "Selesai",
+  dibatalkan: "Dibatalkan",
+};
+
+export const LABEL_METODE: Record<MetodePembayaran, string> = {
+  qris: "QRIS",
+  va_bca: "Virtual Account BCA",
+  va_mandiri: "Virtual Account Mandiri",
+  gopay: "GoPay",
+};
+
+export const LABEL_LOG: Record<LogServis["aktivitas"], string> = {
+  dibuat: "Work order dibuat",
+  jadwal: "Jadwal dikonfirmasi",
+  tiba: "Teknisi tiba",
+  mulai: "Perbaikan dimulai",
+  catatan: "Catatan teknisi",
+  bukti_valid: "Bukti terverifikasi",
+  bukti_ditolak: "Bukti ditolak",
+  belum_beres: "Penghuni: belum beres",
+  selesai: "Perbaikan selesai",
+  dibatalkan: "Dibatalkan",
+};
+
+const hariJam = new Intl.DateTimeFormat("id-ID", { weekday: "short", day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
+
+/** "Rab, 25 Nov, 10.00". */
+export function jadwal(iso: string): string {
+  return hariJam.format(new Date(iso));
+}
+
+export const kodeInvoice = (id: number) => `INV-${String(id).padStart(4, "0")}`;

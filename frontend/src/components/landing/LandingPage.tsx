@@ -6,7 +6,6 @@ import { CobaLaporan } from "./CobaLaporan";
 import { HeroArt } from "./HeroArt";
 import { LandingMotion } from "./LandingMotion";
 import { SebelumSesudah } from "./SebelumSesudah";
-import { Stiker } from "@/components/ui/Stiker";
 
 const NAV = [
   { href: "#tentang", label: "Tentang" },
@@ -16,10 +15,10 @@ const NAV = [
   { href: "#layanan", label: "Layanan" },
 ];
 
-const LAYANAN: Array<{ nama: string; isi: string; tersedia: boolean; ikon: IkonKosmos }> = [
-  { nama: "Complaint Handling", isi: "Keluhan, validasi sewa, klasifikasi AI, dan notifikasi.", tersedia: true, ikon: Ticket },
-  { nama: "Repair Verification", isi: "Pencarian teknisi, estimasi biaya, dan verifikasi foto bukti.", tersedia: false, ikon: Wrench },
-  { nama: "Billing & Commission", isi: "Invoice, pembayaran, rekonsiliasi, dan laporan kas pemilik.", tersedia: false, ikon: ChartNoAxesColumnIncreasing },
+const LAYANAN: Array<{ nama: string; isi: string; ikon: IkonKosmos }> = [
+  { nama: "Complaint Handling", isi: "Keluhan, validasi sewa, klasifikasi AI, dan notifikasi.", ikon: Ticket },
+  { nama: "Repair Verification", isi: "Pencarian teknisi, estimasi biaya, dan verifikasi foto bukti.", ikon: Wrench },
+  { nama: "Billing & Commission", isi: "Invoice, pembayaran, rekonsiliasi, dan laporan kas pemilik.", ikon: ChartNoAxesColumnIncreasing },
 ];
 
 const PERAN = [
@@ -186,11 +185,10 @@ export function LandingPage() {
             </div>
             <ul className="mt-14">
               {LAYANAN.map((l, i) => (
-                <li key={l.nama} data-reveal style={{ "--tunda": `${i * 90}ms` } as React.CSSProperties} className="baris-layanan group relative grid items-center gap-x-8 gap-y-3 border-t border-plum/15 py-8 md:grid-cols-[72px_minmax(0,4fr)_minmax(0,5fr)_210px]">
+                <li key={l.nama} data-reveal style={{ "--tunda": `${i * 90}ms` } as React.CSSProperties} className="baris-layanan group relative grid items-center gap-x-8 gap-y-3 border-t border-plum/15 py-8 md:grid-cols-[72px_minmax(0,4fr)_minmax(0,5fr)]">
                   <l.ikon className="size-16 transition-transform duration-500 ease-out-expo group-hover:scale-110 group-hover:-rotate-6" />
                   <h3 className="wide text-[clamp(1.25rem,2vw,1.75rem)] transition-transform duration-500 ease-out-expo md:group-hover:translate-x-2">{l.nama}</h3>
                   <p className="leading-relaxed text-navy-soft">{l.isi}</p>
-                  <Stiker varian={l.tersedia ? "aktif" : "netral"}>{l.tersedia ? "Tersedia di prototype" : "Tahap berikutnya"}</Stiker>
                 </li>
               ))}
             </ul>

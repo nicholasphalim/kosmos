@@ -5,6 +5,8 @@ export default defineConfig({
   testDir: "./e2e",
   timeout: 60_000,
   fullyParallel: false,
+  // Satu worker: tes "reset lewat terminal" memakai sinyal global yang menghapus sesi di semua tab.
+  workers: 1,
   reporter: "list",
   use: {
     baseURL: "http://localhost:3100",

@@ -6,7 +6,7 @@ import { expect, test, type Page } from "@playwright/test";
 
 async function masukSebagai(page: Page, nama: string) {
   await page.goto("/login");
-  if (nama.startsWith("Pak ")) await page.getByRole("tab", { name: "Pemilik" }).click();
+  if (nama === "Pak Derren") await page.getByRole("tab", { name: "Pemilik" }).click();
   await page.getByRole("button", { name: new RegExp(nama) }).click();
 }
 
@@ -32,10 +32,6 @@ test("Skenario 1: Dea (sewa aktif) melapor, tiket dibuat dan diklasifikasi AI", 
   await expect(page.getByText("Kategori: AC")).toBeVisible();
   await expect(page.getByText("Prioritas sedang", { exact: true })).toBeVisible();
 
-  // Jejak layanan menampilkan orkestrasi Task -> Entity -> Utility.
-  await page.getByText("Jejak layanan (SOA)").click();
-  await expect(page.getByText("getStatusSewa(unit=7) → aktif")).toBeVisible();
-  await expect(page.getByText(/classifyKeluhan → AC/)).toBeVisible();
 
   // Outbox WhatsApp penghuni berisi notifikasi baru.
   await page.getByRole("button", { name: /Pesan WhatsApp, \d+ baru/ }).click();
@@ -59,7 +55,7 @@ test("Validasi form: deskripsi terlalu pendek tidak dikirim", async ({ page }) =
   await expect(page.getByText("Ceritakan masalahnya minimal 10 karakter.")).toBeVisible();
 });
 
-test("Skenario 3: Pak Derren memfilter prioritas tinggi dan menandai diproses", async ({ page }) => {
+test("Skenario 3: Pak Derren memfilter prioritas tinggi lalu membatalkan tiket", async ({ page }) => {
   await masukSebagai(page, "Pak Derren");
   await expect(page).toHaveURL(/\/pemilik/);
   await expect(page.getByRole("heading", { name: "Halo, Pak Derren" })).toBeVisible();
@@ -67,12 +63,13 @@ test("Skenario 3: Pak Derren memfilter prioritas tinggi dan menandai diproses", 
   await page.getByRole("button", { name: /1 prioritas tinggi/ }).click();
   const daftar = page.getByRole("main");
   const baris = daftar.getByRole("listitem").filter({ hasText: "Stop kontak memercikkan api" });
-  await expect(baris).toBeVisible();
-  await baris.getByRole("button", { name: "Tandai diproses" }).click();
+  await expect(baris.getByRole("link", { name: "Cari teknisi" })).toBeVisible();
+  page.once("dialog", (d) => d.accept());
+  await baris.getByRole("button", { name: "Batalkan TKT-0057" }).click();
 
   // Notifikasi status baru muncul di outbox WhatsApp pemilik.
-  await expect(page.getByText("Tiket B-201 ditandai diproses.")).toBeVisible({ timeout: 10_000 });
-  await page.getByRole("group", { name: "Saring status" }).getByRole("button", { name: /Diproses/ }).click();
+  await expect(page.getByText("Tiket B-201 dibatalkan.")).toBeVisible({ timeout: 10_000 });
+  await page.getByRole("group", { name: "Saring status" }).getByRole("button", { name: /Dibatalkan/ }).click();
   await page.getByRole("group", { name: "Saring prioritas" }).getByRole("button", { name: "Semua" }).click();
   await expect(daftar.getByRole("listitem").filter({ hasText: "Stop kontak memercikkan api" })).toBeVisible();
 });
@@ -83,7 +80,7 @@ test("Skenario 4: tiket tanpa klasifikasi bisa diklasifikasi ulang oleh pemilik"
   const baris = page.getByRole("main").getByRole("listitem").filter({ hasText: "TKT-0056" });
   await expect(baris.getByText("Perlu review")).toBeVisible();
   await baris.getByRole("button", { name: "Klasifikasi ulang" }).click();
-  await expect(baris.getByRole("button", { name: "Tandai diproses" })).toBeVisible({ timeout: 10_000 });
+  await expect(baris.getByRole("link", { name: "Cari teknisi" })).toBeVisible({ timeout: 10_000 });
   await expect(baris.getByText("Perlu review")).toBeHidden();
 });
 
@@ -97,7 +94,8 @@ test("Guard: penghuni tidak bisa membuka dashboard pemilik", async ({ page }) =>
 test("Reset data demo lewat tombol di halaman login", async ({ page }) => {
   await masukSebagai(page, "Pak Derren");
   const baris = page.getByRole("main").getByRole("listitem").filter({ hasText: "TKT-0057" });
-  await baris.getByRole("button", { name: "Tandai diproses" }).click();
+  page.once("dialog", (d) => d.accept());
+  await baris.getByRole("button", { name: "Batalkan TKT-0057" }).click();
   await expect(baris).toBeHidden({ timeout: 10_000 });
 
   await page.getByRole("button", { name: "Keluar" }).click();
@@ -106,7 +104,7 @@ test("Reset data demo lewat tombol di halaman login", async ({ page }) => {
 
   await masukSebagai(page, "Pak Derren");
   await expect(
-    page.getByRole("main").getByRole("listitem").filter({ hasText: "TKT-0057" }).getByRole("button", { name: "Tandai diproses" }),
+    page.getByRole("main").getByRole("listitem").filter({ hasText: "TKT-0057" }).getByRole("link", { name: "Cari teknisi" }),
   ).toBeVisible();
 });
 
