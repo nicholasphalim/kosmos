@@ -49,3 +49,6 @@ next-env.d.ts
 
 # token reset data demo (npm run demo:reset)
 /.demo-reset
+
+# dibuat otomatis oleh next dev
+/AGENTS.md
