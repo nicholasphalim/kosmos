@@ -30,7 +30,7 @@ Status (25 Nov 2026):
 | WhatsApp | Mock sampai akhir, tampil sebagai layar HP "WhatsApp Outbox" | Provider eksternal, bukan fokus PoC |
 | Payment gateway | Mock, kegagalan bisa disimulasikan dari UI | Menunjukkan cabang BPMN "Pembayaran berhasil? Tidak" |
 | Kontrak | Contract-first: `contracts/openapi.yaml` ditulis dulu | Frontend dan backend dikerjakan terpisah tanpa saling menunggu |
-| Deploy | Backend di Render, frontend di Vercel, sejak fase awal | Masalah deploy (CORS, redirect OAuth, env) ketahuan lebih awal |
+| Deploy | Backend di Railway (trial 30 hari tanpa kartu), frontend di Vercel, sejak fase awal | Masalah deploy (CORS, redirect OAuth, env) ketahuan lebih awal. Render batal karena verifikasi kartu ditolak |
 
 ---
 
@@ -568,7 +568,7 @@ backend/
 | `CORS_ORIGINS` | `http://localhost:3000,https://<domain-vercel>` |
 | `STORAGE_PROVIDER`, `AI_PROVIDER`, `WA_PROVIDER`, `PAYMENT_PROVIDER` | Pilihan adapter |
 
-Nilai rahasia hanya disimpan di `backend/.env` dan env Render. Jangan ditulis di README, slide, chat grup, atau di-commit.
+Nilai rahasia hanya disimpan di `backend/.env` dan env Railway. Jangan ditulis di README, slide, chat grup, atau di-commit.
 
 ### 7.7 Aturan implementasi
 
@@ -589,7 +589,7 @@ Setiap fase dikerjakan di branch `backend-v2` dan masuk ke `main` lewat satu pul
 | Fase | Isi | Selesai bila | Target |
 |---|---|---|---|
 | **P0 Desain** | Dokumen ini, endpoint auth dan pendaftaran penghuni di `openapi.yaml`, mock MSW untuk endpoint baru | Kontrak dan skema disetujui | 25–26 Nov |
-| **P1 Infrastruktur** | Project Supabase (dev + demo), OAuth Google, Render (`/health`), Vercel, GitHub Actions (ruff, pytest, typecheck, lint, build), branch protection `main` | `/health` live di internet dan CI hijau | 26–27 Nov |
+| **P1 Infrastruktur** | Project Supabase (dev + demo), OAuth Google, Railway (`/health`), Vercel, GitHub Actions (ruff, pytest, typecheck, lint, build) | `/health` live di internet dan CI hijau | 26–27 Nov |
 | **P2 Fondasi** | `core/`, Alembic + migrasi awal (dengan RLS), seed, `/dev/reset`, test harness, test layering, test kontrak | `alembic upgrade head` + seed jalan di `kosmos-dev` dan `kosmos-demo` | 27–28 Nov |
 | **P3 Auth** | Verifikasi JWKS, demo login, `/auth/me`, guard role, pendaftaran penghuni. Frontend: tombol Google, `/auth/callback`, pesan email belum terdaftar, halaman `/pemilik/penghuni` | Login Google sampai dashboard sesuai role berhasil di URL publik | 29 Nov–1 Des |
 | **P4 Complaint Handling** | HMR keluhan, status, klasifikasi ulang, buka ulang. Tenant and Lease, Complaint Ticket. Media Storage (Supabase), AI Classification, Notification | E2E live skenario 1–4 | 2–4 Des |
@@ -607,7 +607,7 @@ Setiap fase dikerjakan di branch `backend-v2` dan masuk ke `main` lewat satu pul
 | Aktifkan provider Google di Supabase | Auth → Providers → Google, isi Client ID dan Client Secret |
 | Atur URL di Supabase | Site URL = domain Vercel. Redirect URLs: `http://localhost:3000/auth/callback` dan `https://<domain-vercel>/auth/callback` |
 | Buat bucket `kosmos-media` (private) | Di project dev dan demo |
-| Hubungkan Render dan Vercel ke repo GitHub | Isi env sesuai §7.6 dan §6.5 |
+| Hubungkan Railway dan Vercel ke repo GitHub | Isi env sesuai §7.6 dan §6.5 |
 
 ---
 
@@ -635,9 +635,9 @@ CI (GitHub Actions) menjalankan ruff, pytest (dengan service container Postgres)
 | Komponen | Platform | Catatan |
 |---|---|---|
 | Frontend | Vercel | Env: `NEXT_PUBLIC_API_MODE=live`, base URL backend, URL dan publishable key Supabase |
-| Backend | Render (free) | Tertidur setelah 15 menit tanpa request, bangun lagi sekitar 50 detik. Buka URL backend 1–2 menit sebelum presentasi |
+| Backend | Railway (trial: kredit $5 sekali, 30 hari, region Singapore) | Konfigurasi di `backend/railway.json`. Kredit cukup untuk sekitar sebulan; trial berakhir sekitar 26 Des, setelah jadwal demo. Bila App Sleeping aktif, buka URL backend 1–2 menit sebelum presentasi |
 | Database + Storage + Auth | Supabase `kosmos-demo` (free) | Project di-pause setelah 7 hari tidak aktif. Buka dashboard H-1 presentasi |
-| Migrasi | Dijalankan saat deploy (`alembic upgrade head` di build command Render) | |
+| Migrasi | Dijalankan saat deploy (`alembic upgrade head` sebagai pre-deploy command Railway) | |
 | CORS | `CORS_ORIGINS` di env backend | Hanya domain Vercel + localhost |
 
 Rencana cadangan demo: frontend mode mock (`npm run dev` di `frontend/`) tetap berfungsi walaupun backend atau Supabase mati.
