@@ -134,7 +134,9 @@ def test_aturan_tutup_dan_buka_ulang(api):
 def test_otorisasi_daftar_dan_detail_tiket(api):
     assert {t["id"] for t in api.get(f"{V}/tiket", headers=login_demo(api, 1)).json()} == {48, 52}
     assert len(api.get(f"{V}/tiket", headers=login_demo(api, 4)).json()) == 8
-    assert api.get(f"{V}/tiket", headers=login_demo(api, 8)).json() == []
+    # Teknisi hanya melihat tiket yang work order-nya ditugaskan kepadanya (Pak Slamet: WO-0011, WO-0012).
+    assert {t["id"] for t in api.get(f"{V}/tiket", headers=login_demo(api, 8)).json()} == {51, 52}
+    assert api.get(f"{V}/tiket/57", headers=login_demo(api, 8)).status_code == 404
     assert api.get(f"{V}/tiket/57", headers=login_demo(api, 1)).status_code == 404  # tiket Fredo
     assert api.get(f"{V}/keluhan/101", headers=login_demo(api, 1)).status_code == 404
     assert api.get(f"{V}/keluhan/101", headers=login_demo(api, 3)).json()["kode"] == "KLH-0101"

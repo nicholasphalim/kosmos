@@ -6,20 +6,28 @@ kosmos.test yang tidak bisa menerima email, jadi persona seed hanya bisa masuk l
     uv run python -m app.seed          isi data bila database masih kosong
     POST /api/v1/dev/reset             kosongkan semua tabel lalu isi ulang (hanya DEMO_MODE)
 
-Jejak Repair Verification dan Billing (estimasi, work order, invoice, tagihan sewa) ditambahkan di fase P5-P6.
+Pembayaran, laporan kas, dan tagihan sewa (Billing dan Rent Billing) ditambahkan di fase P6.
 """
 
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import datetime, timedelta
 
 from sqlalchemy import func, select, text
 from sqlalchemy.orm import Session
 
 from app.core.models import metadata
-from app.core.waktu import menit_lalu, now_utc, tanggal_geser
+from app.core.waktu import WIB, menit_lalu, now_utc, tanggal_geser
 from app.services.entity.complaint_ticket.models import Keluhan, Tiket, TiketRiwayat
+from app.services.entity.invoice.models import Invoice
 from app.services.entity.technician.models import Teknisi
 from app.services.entity.tenant_lease.models import Pengguna, Properti, Sewa, Unit
+from app.services.entity.work_order.models import LogServis, WorkOrder
+from app.services.micro.commission_calculation import hitung_komisi
+from app.services.micro.cost_estimation import estimasi_biaya
+from app.services.micro.evidence_verification import Foto, verifikasi_bukti
+from app.services.micro.technician_matching import Titik, jarak_km
+from app.services.task.hmr.models import Estimasi
+from app.services.utility.media_storage.models import Lampiran
 from app.services.utility.notification.models import Notifikasi
 
 PENGGUNA = [
@@ -71,6 +79,15 @@ TEKNISI = [
 
 
 @dataclass(frozen=True)
+class Bayar:
+    """Pembayaran invoice oleh pemilik. Baris Payment dan laporan kas diisi di fase P6."""
+
+    menit: int
+    metode: str
+    gagal_dulu: str | None = None  # metode yang gagal sebelum pembayaran berhasil
+
+
+@dataclass(frozen=True)
 class Perbaikan:
     """Jejak perbaikan tiket yang sudah diproses/selesai. Menit dihitung mundur dari waktu seed."""
 
@@ -81,6 +98,7 @@ class Perbaikan:
     tiba: int | None = None
     mulai: int | None = None
     selesai: int | None = None
+    bayar: Bayar | None = None
 
 
 @dataclass(frozen=True)
@@ -116,7 +134,16 @@ TIKET_AWAL = [
         "sedang",
         "AC tidak dingin mengganggu kenyamanan, tidak berbahaya.",
         0.9,
-        Perbaikan(9, 12 * H - 40, "selesai", 11 * H + 600, 11 * H + 600, 11 * H + 590, 11 * H + 500),
+        Perbaikan(
+            9,
+            12 * H - 40,
+            "selesai",
+            11 * H + 600,
+            11 * H + 600,
+            11 * H + 590,
+            11 * H + 500,
+            Bayar(11 * H + 420, "qris"),
+        ),
     ),
     TiketAwal(
         49,
@@ -131,7 +158,16 @@ TIKET_AWAL = [
         "sedang",
         "Saluran mampet mengganggu penggunaan kamar mandi.",
         0.86,
-        Perbaikan(10, 6 * H - 30, "selesai", 5 * H + 900, 5 * H + 900, 5 * H + 895, 5 * H + 840),
+        Perbaikan(
+            10,
+            6 * H - 30,
+            "selesai",
+            5 * H + 900,
+            5 * H + 900,
+            5 * H + 895,
+            5 * H + 840,
+            Bayar(5 * H + 600, "va_bca", gagal_dulu="gopay"),
+        ),
     ),
     TiketAwal(
         52,
@@ -273,9 +309,150 @@ def _isi_tiket(db: Session, now: datetime) -> None:
     db.flush()
 
 
+# Nomor awal sama dengan mode mock: WO-0009 dst., sehingga tiket TKT-0051 dikerjakan lewat WO-0012.
+ID_WO_AWAL = 9
+
+
+def _isi_perbaikan(db: Session, now: datetime) -> None:
+    """Repair Verification tiket awal: estimasi disetujui -> work order -> log servis -> bukti -> invoice."""
+    nama = {p[0]: p[1] for p in PENGGUNA}
+    pemilik = nama[4]
+    lokasi_unit = {u[0]: next(Titik(p[3], p[4]) for p in PROPERTI if p[0] == u[1]) for u in UNIT}
+    nomor_unit = {u[0]: u[2] for u in UNIT}
+    lokasi_teknisi = {t[0]: Titik(t[6], t[7]) for t in TEKNISI}
+    id_est = id_wo = id_inv = id_lampiran = 0
+    for a in TIKET_AWAL:
+        r = a.perbaikan
+        if not r or not a.kategori or not a.urgensi:
+            continue
+        id_est += 1
+        id_wo_ini = ID_WO_AWAL + id_wo
+        id_wo += 1
+        jarak = jarak_km(lokasi_unit[a.unit], lokasi_teknisi[r.teknisi])
+        rincian, total = estimasi_biaya(a.kategori, a.urgensi, a.deskripsi, jarak)
+        setuju = menit_lalu(r.disetujui, now)
+        db.add(
+            Estimasi(
+                id=id_est,
+                id_tiket=a.id_tiket,
+                id_teknisi=r.teknisi,
+                kandidat=[],
+                rincian=rincian,
+                total=total,
+                status="disetujui",
+                diputuskan_oleh=pemilik,
+                diputuskan_at=setuju,
+                created_at=menit_lalu(r.disetujui + 5, now),
+            )
+        )
+
+        id_sebelum = id_sesudah = verifikasi = None
+        if r.selesai is not None:
+            u = nomor_unit[a.unit]
+            foto = [
+                (f"sebelum-{u}.jpg", "/bukti/sebelum.svg", 184_220),
+                (f"sesudah-{u}.jpg", "/bukti/sesudah.svg", 201_904),
+            ]
+            for nama_file, path, ukuran in foto:
+                id_lampiran += 1
+                db.add(
+                    Lampiran(
+                        id=id_lampiran,
+                        owner_type="bukti",
+                        owner_id=id_wo_ini,
+                        storage_path=path,
+                        nama_file=nama_file,
+                        mime="image/svg+xml",
+                        ukuran_byte=ukuran,
+                        created_at=menit_lalu(r.selesai + 10, now),
+                    )
+                )
+            id_sebelum, id_sesudah = id_lampiran - 1, id_lampiran
+            verifikasi = verifikasi_bukti(
+                Foto("sebelum.jpg", "image/jpeg", 184_220), Foto("sesudah.jpg", "image/jpeg", 201_904)
+            )
+        jadwal = menit_lalu(r.jadwal, now)
+        db.add(
+            WorkOrder(
+                id=id_wo_ini,
+                id_tiket=a.id_tiket,
+                id_teknisi=r.teknisi,
+                id_estimasi=id_est,
+                status=r.wo,
+                biaya_final=total,
+                slot_jadwal=[jadwal.isoformat().replace("+00:00", "Z")],
+                jadwal_kunjungan=jadwal,
+                id_bukti_sebelum=id_sebelum,
+                id_bukti_sesudah=id_sesudah,
+                verifikasi=verifikasi,
+                created_at=setuju,
+                updated_at=menit_lalu(next(m for m in (r.selesai, r.mulai, r.disetujui) if m is not None), now),
+            )
+        )
+        db.flush()
+
+        log = [
+            ("dibuat", r.disetujui, "sistem", f"Ditugaskan ke {nama[r.teknisi]}"),
+            ("jadwal", r.disetujui - 20, nama[a.penghuni], None),
+        ]
+        if r.tiba is not None:
+            log.append(("tiba", r.tiba, nama[r.teknisi], None))
+        if r.mulai is not None:
+            log.append(("mulai", r.mulai, nama[r.teknisi], "Cek instalasi dan ganti komponen yang rusak."))
+        if r.selesai is not None:
+            log += [
+                ("bukti_valid", r.selesai + 10, "Evidence Verification", "4 dari 4 pemeriksaan lolos"),
+                ("dikonfirmasi_penghuni", r.selesai, nama[a.penghuni], None),
+                ("selesai", r.selesai - 30, pemilik, "Pemilik menerima hasil perbaikan"),
+            ]
+        db.add_all(
+            LogServis(id_work_order=id_wo_ini, aktivitas=akt, catatan=cat, oleh=oleh, waktu=menit_lalu(m, now))
+            for akt, m, oleh, cat in log
+        )
+
+        # Billing: invoice terbit ke pemilik saat pemilik menerima hasil perbaikan.
+        if r.selesai is None:
+            continue
+        persen, komisi = hitung_komisi(total)
+        terbit = menit_lalu(r.selesai - 30, now)
+        id_inv += 1
+        db.add(
+            Invoice(
+                id=id_inv,
+                id_work_order=id_wo_ini,
+                jenis="perbaikan",
+                rincian=rincian,
+                biaya=total,
+                persen_komisi=persen,
+                komisi=komisi,
+                total=total,
+                status="lunas" if r.bayar else "belum_dibayar",
+                jatuh_tempo=terbit.astimezone(WIB).date() + timedelta(days=7),
+                dibayar_at=menit_lalu(r.bayar.menit, now) if r.bayar else None,
+                created_at=terbit,
+            )
+        )
+    db.flush()
+
+
 def _notifikasi_awal(nama: dict[int, str]) -> list[tuple[int, str, str, str, int]]:
-    """(id penerima, kode tiket, jenis, isi, menit lalu). Notifikasi perbaikan dan tagihan menyusul di P5-P6."""
+    """(id penerima, kode tiket, jenis, isi, menit lalu)."""
     return [
+        (
+            4,
+            "TKT-0052",
+            "invoice",
+            f"Tagihan perbaikan A-101 ({nama[1]}) INV-0003 Rp 165.000 sudah terbit. Bayar sebelum jatuh tempo.",
+            2 * H + 240,
+        ),
+        (
+            8,
+            "TKT-0051",
+            "teknisi_ditugaskan",
+            "Pekerjaan baru WO-0012: Lampu kamar mandi mati total, Kos Kenanga B-201.",
+            25 * 60,
+        ),
+        (3, "TKT-0051", "progres", "Pak Slamet sudah tiba dan mulai memperbaiki.", 62),
         (4, "TKT-0056", "tiket_dibuat", f"Keran kamar mandi tidak menutup. Unit B-202 ({nama[5]}).", 110),
         (5, "TKT-0056", "tiket_dibuat", "Laporanmu diterima: Keran kamar mandi tidak menutup.", 110),
         (
@@ -336,6 +513,7 @@ def isi_data(db: Session) -> None:
     db.flush()
     now = now_utc()
     _isi_tiket(db, now)
+    _isi_perbaikan(db, now)
     _isi_notifikasi(db, now)
     _setel_sequence(db)
 

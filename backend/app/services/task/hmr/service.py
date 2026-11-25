@@ -1,26 +1,39 @@
-"""[Task: Handle Maintenance Request] orkestrator Complaint Handling.
+"""[Task: Handle Maintenance Request] orkestrator Complaint Handling dan bagian Repair Verification
+(cari teknisi, estimasi, persetujuan, jadwal kunjungan, keputusan biaya tambahan).
 
 Hanya Task yang boleh memanggil service lain. Urutan langkah dan teks `operasi` di trace
 mengikuti mock frontend (frontend/src/mocks/services.ts, objek `hmr`).
-Bagian Repair Verification (estimasi, persetujuan, jadwal, biaya tambahan) ditambahkan di fase P5.
 """
 
+from datetime import UTC, datetime, timedelta
+
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app import views
 from app.core.errors import ServiceError
-from app.core.format import LABEL_KATEGORI, tanggal
+from app.core.format import LABEL_KATEGORI, jadwal, rupiah, tanggal
 from app.core.trace import Tracer
+from app.core.waktu import WIB, now_utc
 from app.services.entity.complaint_ticket import service as complaint_ticket
 from app.services.entity.complaint_ticket.models import Tiket
+from app.services.entity.invoice import service as invoice
+from app.services.entity.technician import service as technician
 from app.services.entity.tenant_lease import service as tenant_lease
 from app.services.entity.tenant_lease.models import Pengguna
+from app.services.entity.work_order import service as work_order
+from app.services.micro import commission_calculation, cost_estimation, technician_matching
+from app.services.micro.technician_matching import CalonTeknisi, Titik
+from app.services.task.kabar import kabari_perbaikan, kabari_tagihan
 from app.services.utility.ai_classification import service as ai_classification
 from app.services.utility.media_storage import service as media_storage
 from app.services.utility.media_storage.service import FileMasuk
 from app.services.utility.notification import service as notification
 from app.services.utility.notification.service import Penerima
-from app.views.schemas import KeluhanResponse, TiketDetail
+from app.views.schemas import EstimasiBiaya, EstimasiResponse, KeluhanResponse, PersetujuanResponse, TiketDetail
+from app.views.schemas import WorkOrder as WorkOrderOut
+
+from .models import Estimasi
 
 PESAN_AI_GAGAL = "Klasifikasi AI gagal. Tiket tetap dibuat dan menunggu klasifikasi ulang oleh pemilik."
 
@@ -168,10 +181,18 @@ def ajukan_keluhan(db: Session, user: Pengguna, deskripsi: str, files: list[File
     )
 
 
+def _tolak_estimasi_menunggu(db: Session, id_tiket: int) -> None:
+    """Estimasi yang belum diputuskan tidak berlaku lagi (diganti, ditutup, atau dibatalkan)."""
+    for e in db.scalars(select(Estimasi).filter_by(id_tiket=id_tiket, status="menunggu")):
+        e.status = "ditolak"
+    db.flush()
+
+
 def ubah_status(db: Session, user: Pengguna, id_tiket: int, ke: str, catatan: str | None) -> TiketDetail:
     """Keputusan pemilik atas tiket tanpa memanggil teknisi:
-    - "selesai": ditangani sendiri, hanya dari "diklasifikasi", tanpa biaya.
-    - "dibatalkan": tiket dibatalkan (P5: beserta estimasi dan work order yang berjalan).
+    - "selesai": ditangani sendiri, hanya dari "diklasifikasi", tanpa work order dan tanpa tagihan.
+    - "dibatalkan": tiket dibatalkan beserta estimasi dan work order yang berjalan. Bila teknisi sudah
+      tiba di lokasi, pemilik tetap membayar biaya kunjungan (invoice jenis kunjungan).
     Status "diproses" tidak diset manual: tiket diproses setelah estimasi biaya disetujui.
     """
     alasan = (catatan or "").strip()[:300] or None
@@ -185,9 +206,35 @@ def ubah_status(db: Session, user: Pengguna, id_tiket: int, ke: str, catatan: st
             )
         complaint_ticket.set_status_tiket(db, id_tiket, "selesai", user.nama, alasan)
         complaint_ticket.set_penanganan(db, id_tiket, "sendiri", alasan)
-    else:
-        complaint_ticket.set_status_tiket(db, id_tiket, "dibatalkan", user.nama, alasan)
-    kabari_perubahan(db, t, ke, alasan)
+        _tolak_estimasi_menunggu(db, id_tiket)
+        kabari_perubahan(db, t, "selesai", alasan)
+        db.commit()
+        return views.tiket_detail(db, t)
+
+    complaint_ticket.set_status_tiket(db, id_tiket, "dibatalkan", user.nama, alasan)
+    _tolak_estimasi_menunggu(db, id_tiket)
+    wo = work_order.by_tiket(db, id_tiket)
+    inv_kunjungan = None
+    if wo and wo.status not in work_order.DITUTUP:
+        sudah_tiba = work_order.sudah_ada_log(db, wo.id, "tiba")
+        work_order.set_status(db, wo.id, "dibatalkan")
+        work_order.add_log(
+            db,
+            wo.id,
+            "dibatalkan",
+            user.nama,
+            "Tiket dibatalkan pemilik setelah teknisi tiba; biaya kunjungan ditagihkan"
+            if sudah_tiba
+            else "Tiket dibatalkan pemilik",
+        )
+        if sudah_tiba:
+            est = db.get(Estimasi, wo.id_estimasi)
+            rincian, total = cost_estimation.biaya_kunjungan(est.rincian if est else [])
+            persen, komisi = commission_calculation.hitung_komisi(total)
+            inv_kunjungan = invoice.add(db, wo.id, "kunjungan", rincian, total, persen, komisi)
+    kabari_perubahan(db, t, "dibatalkan", alasan)
+    if inv_kunjungan:
+        kabari_tagihan(db, inv_kunjungan, "invoice")
     db.commit()
     return views.tiket_detail(db, t)
 
@@ -221,3 +268,199 @@ def buka_ulang(db: Session, user: Pengguna, id_tiket: int, alasan: str) -> Tiket
     kabari_perubahan(db, t, "dibuka_ulang", teks)
     db.commit()
     return views.tiket_detail(db, t)
+
+
+# ---------- Repair Verification (bagian HMR) ----------
+
+
+def buat_estimasi(db: Session, user: Pengguna, id_tiket: int) -> EstimasiResponse:
+    """Cari teknisi dan sajikan estimasi biaya (BPMN Repair Verification langkah 1-3)."""
+    tr = Tracer()
+    with tr.step("Handle Maintenance Request", "Task", f"getEstimasiBiaya(tiket={id_tiket})"):
+        pass
+    with tr.step("Complaint Ticket", "Entity", "getTiket") as s:
+        t = views.tiket_untuk(db, user, id_tiket)
+        s.operasi = f"getTiket → {t.kategori or '?'}, {t.urgensi or '?'}"
+    if t.status != "diklasifikasi" or not t.kategori or not t.urgensi:
+        raise ServiceError(
+            409, "TIKET_BELUM_SIAP", "Teknisi dicarikan untuk tiket yang sudah diklasifikasi dan belum diproses."
+        )
+    kategori, urgensi = t.kategori, t.urgensi
+    k = complaint_ticket.get_keluhan(db, t.id_keluhan)
+    unit = tenant_lease.info_unit(db, k.id_unit)
+    lokasi = Titik(unit.lat, unit.lng)
+
+    with tr.step("Technician", "Entity", "getTeknisiTersedia") as s:
+        calon_rows = technician.get_teknisi(db)
+        s.operasi = f"getTeknisiTersedia({LABEL_KATEGORI[kategori]}) → {len(calon_rows)} teknisi"
+    with tr.step("Technician", "Entity", "getStatusVerifikasiTeknisi") as s:
+        n = sum(technician.get_status_verifikasi(db, r.id_pengguna) for r in calon_rows)
+        s.operasi = f"getStatusVerifikasiTeknisi → {n} terverifikasi"
+    with tr.step("Work Order", "Entity", "hitungBebanAktif(teknisi[])"):
+        beban = {r.id_pengguna: work_order.jumlah_aktif(db, r.id_pengguna) for r in calon_rows}
+
+    # Teknisi yang estimasinya sudah ditolak pemilik untuk tiket ini tidak dipilih lagi.
+    ditolak = set(
+        db.scalars(
+            select(Estimasi.id_teknisi).where(
+                Estimasi.id_tiket == id_tiket, Estimasi.status == "ditolak", Estimasi.diputuskan_oleh.is_not(None)
+            )
+        )
+    )
+    calon = [
+        CalonTeknisi(
+            teknisi=views.teknisi_ringkas(db, r.id_pengguna).model_dump(),
+            tersedia=r.tersedia,
+            jarak_km=technician_matching.jarak_km(lokasi, Titik(r.lat, r.lng)),
+            beban=beban[r.id_pengguna],
+            dikecualikan="Estimasinya sudah kamu tolak" if r.id_pengguna in ditolak else None,
+        )
+        for r in calon_rows
+    ]
+    with tr.step("Technician Matching", "Micro", "matchTeknisi") as s:
+        kandidat = technician_matching.match_teknisi(kategori, urgensi, calon)
+        terpilih = next((x for x in kandidat if x["lolos"]), None)
+        nama = terpilih["teknisi"]["nama"] if terpilih else "tidak ada"
+        s.operasi = f"matchTeknisi({LABEL_KATEGORI[kategori]}, {urgensi}) → {nama}"
+    if terpilih is None:
+        raise ServiceError(
+            422,
+            "TEKNISI_TIDAK_ADA",
+            "Tidak ada teknisi lain yang tersedia untuk kategori ini. Coba lagi nanti atau tangani sendiri."
+            if ditolak
+            else "Belum ada teknisi terverifikasi yang tersedia untuk kategori ini.",
+        )
+    with tr.step("Cost Estimation", "Micro", "estimateBiaya") as s:
+        rincian, total = cost_estimation.estimasi_biaya(kategori, urgensi, k.deskripsi, terpilih["jarak_km"])
+        s.operasi = f"estimateBiaya → {rupiah(total)}"
+
+    with tr.step("Handle Maintenance Request", "Task", "simpan estimasi → menunggu persetujuan"):
+        # Estimasi lama yang belum diputuskan diganti yang baru.
+        _tolak_estimasi_menunggu(db, id_tiket)
+        est = Estimasi(
+            id_tiket=id_tiket,
+            id_teknisi=terpilih["teknisi"]["id"],
+            kandidat=kandidat,
+            rincian=rincian,
+            total=total,
+            status="menunggu",
+            created_at=now_utc(),
+        )
+        db.add(est)
+        db.flush()
+    pemilik = tenant_lease.get_pengguna(db, unit.id_pemilik)
+    isi = (
+        f"Estimasi {unit.nomor_unit}: {rupiah(total)}, teknisi {terpilih['teknisi']['nama']}. "
+        "Biaya ditagihkan ke kamu bila disetujui. Buka Kosmos untuk memutuskan."
+    )
+    with tr.step("Notification", "Utility", "setNotifikasi(estimasi)") as s:
+        n = notification.kirim(db, [_penerima(pemilik)], complaint_ticket.kode_tiket(t.id), "estimasi", lambda _p: isi)
+        s.operasi = f"setNotifikasi(estimasi) × {n} (WA mock)"
+    db.commit()
+    return EstimasiResponse(estimasi=views.estimasi(db, est), trace=tr.as_list())  # type: ignore[arg-type]
+
+
+def get_estimasi(db: Session, user: Pengguna, id_tiket: int) -> EstimasiBiaya | None:
+    """Estimasi terakhir untuk tiket (null bila belum dicarikan teknisi)."""
+    views.tiket_untuk(db, user, id_tiket)
+    q = select(Estimasi).filter_by(id_tiket=id_tiket).order_by(Estimasi.id.desc())
+    est = db.scalars(q).first()
+    return views.estimasi(db, est) if est else None
+
+
+def usulan_slot(urgensi: str, dari: datetime | None = None) -> list[str]:
+    """Usulan jadwal kunjungan (jam WIB): urgensi tinggi dalam hitungan jam, selain itu esok hari."""
+    d = (dari or now_utc()).astimezone(WIB)
+
+    def jam_ke(tambah: int) -> datetime:
+        return d.replace(minute=0, second=0, microsecond=0) + timedelta(hours=tambah)
+
+    def hari_ke(tambah: int, jam: int) -> datetime:
+        return (d + timedelta(days=tambah)).replace(hour=jam, minute=0, second=0, microsecond=0)
+
+    if urgensi == "tinggi":
+        slot = [jam_ke(2), jam_ke(4), hari_ke(1, 9)]
+    else:
+        slot = [hari_ke(1, 10), hari_ke(1, 15), hari_ke(2, 10)]
+    return [x.astimezone(UTC).isoformat().replace("+00:00", "Z") for x in slot]
+
+
+def set_persetujuan(db: Session, user: Pengguna, id_estimasi: int, disetujui: bool) -> PersetujuanResponse:
+    """Set Persetujuan Biaya (non-agnostic). Disetujui -> Add Work Order + tiket diproses.
+    Ditolak -> tiket tetap diklasifikasi; pemilik bisa mencari teknisi lain atau menangani sendiri.
+    """
+    est = db.get(Estimasi, id_estimasi)
+    if est is None:
+        raise ServiceError(404, "ESTIMASI_TIDAK_ADA", "Estimasi tidak ditemukan.")
+    t = complaint_ticket.get_tiket(db, est.id_tiket)
+    if not views.boleh_lihat_tiket(db, user, t):
+        raise ServiceError(404, "ESTIMASI_TIDAK_ADA", "Estimasi tidak ditemukan.")
+    if est.status != "menunggu":
+        raise ServiceError(409, "SUDAH_DIPUTUSKAN", "Estimasi ini sudah diputuskan.")
+
+    tr = Tracer()
+    keputusan = "disetujui" if disetujui else "ditolak"
+    with tr.step("Handle Maintenance Request", "Task", f"setPersetujuanBiaya({keputusan})"):
+        est.status = keputusan
+        est.diputuskan_oleh = user.nama
+        est.diputuskan_at = now_utc()
+        db.flush()
+
+    if not disetujui:
+        # Tiket tidak dibatalkan: kerusakannya masih ada, pemilik kembali ke tahap tinjau.
+        db.commit()
+        return PersetujuanResponse(
+            estimasi=views.estimasi(db, est),
+            tiket=views.tiket_detail(db, t),
+            work_order=None,
+            trace=tr.as_list(),  # type: ignore[arg-type]
+        )
+
+    with tr.step("Work Order", "Entity", "addWorkOrder") as s:
+        nama_teknisi = tenant_lease.get_pengguna(db, est.id_teknisi).nama
+        slot = usulan_slot(t.urgensi or "rendah")
+        wo = work_order.add(db, t.id, est.id_teknisi, est.id, est.total, slot, nama_teknisi)
+        s.operasi = f"addWorkOrder → {work_order.kode_wo(wo.id)}, status menunggu_jadwal"
+    with tr.step("Complaint Ticket", "Entity", "setStatusTiket(diproses)"):
+        complaint_ticket.set_status_tiket(db, t.id, "diproses", user.nama)
+    with tr.step("Notification", "Utility", "setNotifikasi(teknisi_ditugaskan)") as s:
+        s.operasi = f"setNotifikasi(teknisi_ditugaskan) × {kabari_perbaikan(db, wo, 'teknisi_ditugaskan')} (WA mock)"
+    db.commit()
+    return PersetujuanResponse(
+        estimasi=views.estimasi(db, est),
+        tiket=views.tiket_detail(db, t),
+        work_order=views.work_order(db, wo),
+        trace=tr.as_list(),  # type: ignore[arg-type]
+    )
+
+
+def putuskan_biaya_tambahan(db: Session, user: Pengguna, id_wo: int, id_tambahan: int, disetujui: bool) -> WorkOrderOut:
+    """Set Persetujuan Biaya Tambahan: pemilik memutuskan biaya di luar estimasi yang diajukan teknisi."""
+    wo = views.work_order_untuk(db, user, id_wo)
+    tambahan = work_order.get_tambahan(db, wo.id, id_tambahan)
+    if tambahan.status != "menunggu":
+        raise ServiceError(409, "SUDAH_DIPUTUSKAN", "Biaya tambahan ini sudah diputuskan.")
+    if wo.status in work_order.DITUTUP:
+        raise ServiceError(409, "WORK_ORDER_DITUTUP", "Work order sudah ditutup.")
+    work_order.putuskan_tambahan(db, wo.id, id_tambahan, disetujui)
+    aktivitas = "biaya_tambahan_disetujui" if disetujui else "biaya_tambahan_ditolak"
+    work_order.add_log(db, wo.id, aktivitas, user.nama, f"{rupiah(tambahan.jumlah)}: {tambahan.alasan}")
+    jenis = "tambahan_disetujui" if disetujui else "tambahan_ditolak"
+    kabari_perbaikan(db, wo, jenis, f"{rupiah(tambahan.jumlah)} ({tambahan.alasan})")
+    db.commit()
+    return views.work_order(db, wo)
+
+
+def konfirmasi_jadwal(db: Session, user: Pengguna, id_wo: int, waktu: datetime) -> WorkOrderOut:
+    """Penghuni memilih salah satu jadwal kunjungan yang ditawarkan (Set Jadwal Kunjungan)."""
+    wo = views.work_order_untuk(db, user, id_wo)
+    if wo.status != "menunggu_jadwal":
+        raise ServiceError(409, "JADWAL_SUDAH_ADA", "Jadwal kunjungan sudah dikonfirmasi.")
+    pilihan = next((datetime.fromisoformat(x) for x in wo.slot_jadwal if datetime.fromisoformat(x) == waktu), None)
+    if pilihan is None:
+        raise ServiceError(422, "SLOT_TIDAK_VALID", "Pilih salah satu jadwal yang ditawarkan.")
+    work_order.set_jadwal(db, wo.id, pilihan)
+    work_order.add_log(db, wo.id, "jadwal", user.nama, jadwal(pilihan))
+    kabari_perbaikan(db, wo, "jadwal")
+    db.commit()
+    return views.work_order(db, wo)
