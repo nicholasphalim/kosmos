@@ -10,7 +10,7 @@ Deadline: minggu ke-2/3 Desember 2026.
 
 Status (25 Nov 2026):
 - Frontend keempat proses selesai dan berjalan penuh di mode mock (19 skenario E2E).
-- Backend dibangun ulang di branch `backend-v2`: PostgreSQL di Supabase, login Google lewat Supabase Auth. P0–P3 selesai dan sudah masuk `main` (PR #4, #5); P4 (Complaint Handling) sedang berjalan, lihat §7.8.
+- Backend dibangun ulang di branch `backend-v2`: PostgreSQL di Supabase, login Google lewat Supabase Auth. P0–P4 selesai (P0–P3 sudah masuk `main` lewat PR #4, #5); P5 (Repair Verification) sedang berjalan, lihat §7.8.
 - Backend versi pertama (SQLite, alur lama) diarsipkan di branch `backend-b0` sebagai referensi.
 
 ---
@@ -273,7 +273,7 @@ Tiket awal:
 - TKT-0054 dan 0057: diklasifikasi, menunggu ditinjau pemilik.
 - TKT-0056: dibuat, belum diklasifikasi (AI gagal).
 
-Semua tanggal dihitung relatif terhadap waktu seed. Seed backend (`backend/app/seed.py`) sudah memuat tiket, keluhan, riwayat, dan notifikasi; estimasi, work order, invoice, dan tagihan sewa ditambahkan di P5–P6.
+Semua tanggal dihitung relatif terhadap waktu seed. Seed backend (`backend/app/seed.py`) sudah memuat tiket, keluhan, riwayat, notifikasi, estimasi, work order, log servis, bukti, dan invoice; riwayat pembayaran, laporan kas, dan tagihan sewa ditambahkan di P6.
 
 ---
 
@@ -518,9 +518,11 @@ backend/
    ├─ seed.py                          ← data demo (§4.1)
    ├─ views/                           ← read model: merakit DTO lintas entity untuk response
    ├─ services/
-   │  ├─ task/       hmr/, csm/, rent_billing/
+   │  ├─ task/       hmr/ (+ tabel estimasi), csm/, rent_billing/,
+   │  │              kabar.py (isi pesan WA perbaikan dan tagihan, dipakai HMR dan CSM)
    │  ├─ micro/      technician_matching.py, cost_estimation.py,
-   │  │              evidence_verification.py, commission_calculation.py
+   │  │              evidence_verification.py, commission_calculation.py,
+   │  │              pembulatan.py (pembulatan setengah ke atas seperti Math.round)
    │  ├─ entity/     tenant_lease/, complaint_ticket/, technician/, work_order/,
    │  │              invoice/, rent_invoice/, payment/, financial_ledger/
    │  └─ utility/    media_storage/   (adapters/local.py, adapters/supabase.py)
@@ -616,7 +618,7 @@ Setiap fase dikerjakan di branch `backend-v2` dan masuk ke `main` lewat satu pul
 | Level | Yang diuji | Perintah |
 |---|---|---|
 | Frontend E2E (mode mock) | 22 skenario: skenario demo, kelola penghuni, validasi form, guard role, reset lewat tombol dan terminal | `npm run test:e2e` (di `frontend/`, setelah build mode mock: `NEXT_PUBLIC_API_MODE=mock npm run build`) |
-| Frontend E2E (mode live) | Complaint Handling (skenario 1–4, validasi, guard, reset lewat tombol dan terminal) terhadap FastAPI sungguhan. Repair Verification dan Billing ditambah di P5–P6. Database `kosmos-dev` di-reset sebelum setiap tes | `npm run test:e2e:live` |
+| Frontend E2E (mode live) | Complaint Handling (skenario 1–4, validasi, guard, reset lewat tombol dan terminal) dan Repair Verification (skenario 5, 5b, 5c, 6, 8, 8b, guard teknisi) terhadap FastAPI sungguhan. Skenario pembayaran (5 bagian bayar, 7, 9, 10, 11) ditambah di P6. Database `kosmos-dev` di-reset sebelum setiap tes | `npm run test:e2e:live` |
 | Backend unit | Micro, state machine tiket dan work order, status sewa, pembulatan | `uv run pytest` (di `backend/`) |
 | Backend integrasi | Setiap endpoint: kasus berhasil, 401, 403, 404, 409, 422 | termasuk di `uv run pytest` |
 | Auth | Token Supabase palsu ditandatangani kunci test (JWKS di-mock), token kedaluwarsa, `aud`/`iss` salah, email belum terdaftar, login pertama mengisi `auth_user_id`, token demo ditolak bila `DEMO_MODE=false` | termasuk di `uv run pytest` |
@@ -657,7 +659,7 @@ QR code untuk slide 44 mengarah ke URL frontend yang di-deploy.
 | 0. Fondasi | 13–15 Nov | Keputusan §2, `openapi.yaml`, scaffold Next.js + MSW | Selesai |
 | 1. Frontend Complaint Handling | 16–22 Nov | Login demo, form keluhan, dashboard penghuni dan pemilik, outbox WA | Selesai |
 | 2. Frontend Repair Verification, Billing, Rent Billing | 23–24 Nov | Halaman teknisi, tinjau tiket, estimasi, biaya tambahan, work order, invoice, bayar sekaligus, tagihan sewa, laporan kas, landing page | Selesai |
-| 3. Backend | 25 Nov–9 Des | Fase P0–P6 di §7.8 | P0–P3 selesai, P4 berjalan |
+| 3. Backend | 25 Nov–9 Des | Fase P0–P6 di §7.8 | P0–P4 selesai, P5 berjalan |
 | 4. Buffer | 10–14 Des | P7: bug fix, naskah demo, screenshot Swagger, QR | Belum |
 
 ---
