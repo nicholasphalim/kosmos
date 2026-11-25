@@ -1181,7 +1181,7 @@ components:
         status:
           type: string
           enum: [selesai, dibatalkan]
-        catatan: { type: string, maxLength: 300, description: Alasan untuk penghuni, mis. sudah ditangani sendiri }
+        catatan: { type: string, maxLength: 300, description: "Alasan untuk penghuni, mis. sudah ditangani sendiri" }
 
     BukaUlangRequest:
       type: object

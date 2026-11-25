@@ -909,7 +909,7 @@ export interface components {
         UbahStatusRequest: {
             /** @enum {string} */
             status: "selesai" | "dibatalkan";
-            /** @description Alasan untuk penghuni */
+            /** @description Alasan untuk penghuni, mis. sudah ditangani sendiri */
             catatan?: string;
         };
         BukaUlangRequest: {
