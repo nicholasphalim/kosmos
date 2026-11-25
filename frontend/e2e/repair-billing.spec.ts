@@ -1,9 +1,14 @@
-import { expect, test, type Page } from "@playwright/test";
+import type { Page } from "@playwright/test";
+import { expect, test } from "./fixtures";
 
 /**
- * Repair Verification + Billing & Commission di mode mock.
- * Satu konteks browser per tes = localStorage bersih = data seed baru.
+ * Repair Verification + Billing & Commission.
+ * Mode mock: satu konteks browser per tes = localStorage bersih = data seed baru.
+ * Mode live: database backend di-reset sebelum setiap tes (e2e/fixtures.ts).
  */
+
+// Mode live sebelum fase P6: endpoint pembayaran belum ada, jadi langkah bayar dilewati.
+const TANPA_PEMBAYARAN = process.env.E2E_TANPA_PEMBAYARAN === "1";
 
 const TAB_ROLE: Record<string, string> = { "Pak Derren": "Pemilik", "Pak Slamet": "Teknisi" };
 
@@ -77,6 +82,7 @@ test("Skenario 5: pemilik memanggil teknisi, penghuni konfirmasi selesai, pemili
   await page.getByRole("link", { name: "Bayar tagihan" }).click();
   await expect(page).toHaveURL(/\/pemilik\/tagihan\/\d+/);
   await expect(page.getByText("Ditagihkan ke")).toBeVisible();
+  if (TANPA_PEMBAYARAN) return;
   await page.getByRole("button", { name: /^Bayar Rp/ }).click();
   await expect(page.getByRole("heading", { name: "Lunas" })).toBeVisible({ timeout: 10_000 });
   await expect(page.getByText("Berhasil · direkonsiliasi")).toBeVisible();
