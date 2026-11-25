@@ -31,28 +31,44 @@ Layanan dirancang dengan pendekatan *Service-Oriented Architecture* (SOA) dan di
 
 ## Prototype
 
-Prototype ini mengimplementasikan layanan **Complaint Handling** sebagai *proof of concept*.
+Prototype mengimplementasikan Complaint Handling, Repair Verification, Billing & Commission, dan tagihan sewa bulanan.
 
 | Bagian | Teknologi |
 |---|---|
-| Frontend | Next.js, TypeScript, Tailwind CSS |
-| Backend (rencana) | FastAPI, PostgreSQL |
+| Frontend | Next.js, TypeScript, Tailwind CSS (Vercel) |
+| Backend | FastAPI, SQLAlchemy, Alembic (Railway) |
+| Database, storage, login Google | PostgreSQL, Storage, dan Auth di Supabase |
 | Kontrak API | OpenAPI ([`contracts/openapi.yaml`](contracts/openapi.yaml)) |
 
-Saat ini frontend berjalan dengan mock API di browser, sehingga bisa dicoba tanpa backend:
+Frontend bisa dicoba tanpa backend (mode mock, data disimpan di browser):
 
 ```bash
 cd frontend
 npm install
+cp .env.example .env.local
 npm run dev
 ```
 
 Buka http://localhost:3000 lalu pilih akun demo. Detail lebih lanjut ada di [`frontend/README.md`](frontend/README.md).
 
+Menjalankan backend (butuh Python 3.13 via [uv](https://docs.astral.sh/uv/) dan project Supabase):
+
+```bash
+cd backend
+cp .env.example .env              # isi DATABASE_URL, SUPABASE_URL, DEMO_JWT_SECRET, dst.
+uv sync
+uv run python -m app.predeploy    # migrasi database + data demo
+uv run uvicorn app.main:app --reload --port 8000   # Swagger: http://localhost:8000/docs
+uv run pytest
+```
+
+Lalu set `NEXT_PUBLIC_API_MODE=live` di `frontend/.env.local`. Rencana lengkap ada di [`docs/IMPLEMENTATION_PLAN.md`](docs/IMPLEMENTATION_PLAN.md).
+
 ## Struktur Repository
 
 ```
 kosmos/
+├─ backend/     Service SOA (FastAPI)
 ├─ contracts/   Kontrak API (OpenAPI)
 ├─ docs/        Rencana implementasi
 └─ frontend/    Aplikasi web (Next.js)
