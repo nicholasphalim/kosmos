@@ -35,6 +35,9 @@ class Settings(BaseSettings):
 
     storage_provider: str = "local"
     upload_dir: Path = BACKEND_DIR / "uploads"
+    # Alamat backend ini, untuk URL file adapter storage `local` (/media-files/...).
+    public_base_url: str = "http://localhost:8000"
+    signed_url_detik: int = 3600
     ai_provider: str = "mock"
     wa_provider: str = "mock"
     payment_provider: str = "mock"
