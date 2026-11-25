@@ -8,6 +8,7 @@ import type {
   LogRequest,
   MetodePembayaran,
   PenghuniBaruRequest,
+  SewaBaruRequest,
   UbahPenghuniRequest,
   UbahStatusRequest,
 } from "@/lib/api/types";
@@ -295,12 +296,20 @@ export const handlers = [
     }),
   ),
 
+  http.post(
+    `${BASE}/pemilik/penghuni/:id_pengguna/sewa`,
+    handle(async ({ request, params }) => {
+      const u = user(request);
+      const body = (await request.json()) as SewaBaruRequest;
+      return HttpResponse.json(tenantLease.addSewa(u, idParam(params.id_pengguna), body), { status: 201 });
+    }),
+  ),
+
   http.get(
     `${BASE}/unit/:id_unit/sewa`,
-    handle(({ request, params }) => {
-      user(request);
-      return HttpResponse.json(tenantLease.getStatusSewa(idParam(params.id_unit)));
-    }),
+    handle(({ request, params }) =>
+      HttpResponse.json(tenantLease.statusSewaUntuk(user(request), idParam(params.id_unit))),
+    ),
   ),
 
   /* ----- Entity: Complaint Ticket ----- */

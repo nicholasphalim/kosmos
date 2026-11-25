@@ -3,6 +3,9 @@
  * dari localStorage. Dipakai oleh tombol di halaman login, sinyal `npm run demo:reset`,
  * dan fungsi console kosmosResetDemo().
  */
+import { config } from "@/lib/config";
+import { keluarGoogle } from "@/lib/supabase";
+
 const KEY_TOKEN = "kosmos.demo-reset-token";
 
 function kunciDemo(): string[] {
@@ -25,8 +28,19 @@ export function hapusDataDemo(): boolean {
   }
 }
 
-/** Hapus data demo lalu kembali ke halaman login dengan data seed baru. */
-export function resetDemo() {
+/**
+ * Hapus data demo lalu kembali ke halaman login dengan data seed baru.
+ * Mode live: database backend juga direset lewat POST /dev/reset (hanya aktif bila DEMO_MODE=true).
+ */
+export async function resetDemo() {
+  if (config.apiMode === "live") {
+    await keluarGoogle();
+    try {
+      await fetch(`${config.apiBaseUrl}/dev/reset`, { method: "POST", signal: AbortSignal.timeout(15_000) });
+    } catch {
+      /* backend tidur/mati: sesi lokal tetap dibersihkan */
+    }
+  }
   hapusDataDemo();
   location.replace("/login");
 }

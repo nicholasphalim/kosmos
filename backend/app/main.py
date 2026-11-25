@@ -7,9 +7,12 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
+from app.auth.router import demo_router as auth_demo_router
+from app.auth.router import router as auth_router
 from app.core.config import get_settings
 from app.core.db import cek_koneksi
 from app.core.errors import pasang_error_handler
+from app.services.entity.tenant_lease.router import router as tenant_lease_router
 
 API_PREFIX = "/api/v1"
 
@@ -39,9 +42,17 @@ app.add_middleware(
 )
 pasang_error_handler(app)
 
+ROUTERS = (
+    auth_router,
+    tenant_lease_router,  # Entity
+)
+for r in ROUTERS:
+    app.include_router(r, prefix=API_PREFIX)
+
 if settings.demo_mode:
     from app.dev.router import router as dev_router
 
+    app.include_router(auth_demo_router, prefix=API_PREFIX)
     app.include_router(dev_router, prefix=API_PREFIX)
 
 

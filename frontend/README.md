@@ -7,11 +7,15 @@ Rencana lengkap: [../docs/IMPLEMENTATION_PLAN.md](../docs/IMPLEMENTATION_PLAN.md
 
 ```bash
 npm install
+cp .env.example .env.local   # isi sesuai mode (lihat di bawah)
 npm run dev                  # http://localhost:3000
 ```
 
-Mode mock tidak butuh backend: request API dicegat MSW (service worker) dan dijawab oleh `src/mocks`.
-Data demo disimpan di localStorage browser. Untuk mengembalikan data awal, pilih salah satu:
+**Mode mock** (default, `NEXT_PUBLIC_API_MODE=mock`) tidak butuh backend: request API dicegat MSW (service worker) dan dijawab oleh `src/mocks`.
+
+**Mode live** (`NEXT_PUBLIC_API_MODE=live`) memanggil FastAPI di `NEXT_PUBLIC_API_BASE_URL` (jalankan backend dulu, lihat README di root). Isi juga `NEXT_PUBLIC_SUPABASE_URL` dan `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` dari project Supabase `kosmos-dev` supaya tombol **Masuk dengan Google** muncul. Email Google hanya bisa masuk bila sudah didaftarkan pemilik di menu **Penghuni**.
+
+Data demo mode mock disimpan di localStorage browser. Untuk mengembalikan data awal, pilih salah satu:
 
 - Terminal: `npm run demo:reset`, lalu refresh halaman Kosmos di browser.
 - Tombol **Reset data demo** di bawah daftar akun pada halaman login.
@@ -26,7 +30,7 @@ Data demo disimpan di localStorage browser. Untuk mengembalikan data awal, pilih
 | `npm run typecheck` | Cek tipe (dipakai juga untuk mendeteksi kontrak yang bergeser) |
 | `npm run lint` | ESLint |
 | `npm run demo:reset` | Kembalikan data demo ke kondisi awal (refresh browser setelahnya) |
-| `npm run test:e2e` | Playwright: 19 skenario (build dulu dengan `npm run build`) |
+| `npm run test:e2e` | Playwright mode mock: 22 skenario. Build dulu dalam mode mock: `NEXT_PUBLIC_API_MODE=mock npm run build` (PowerShell: `$env:NEXT_PUBLIC_API_MODE="mock"; npm run build`) |
 
 ## Struktur
 
@@ -42,6 +46,8 @@ src/
 │  ├─ pemilik/keuangan/      Laporan kas (sewa masuk, perbaikan keluar) + invoice (bayar sekaligus) + tagihan sewa
 │  ├─ pemilik/tagihan/[id]   Invoice perbaikan, bayar via payment gateway (mock)
 │  ├─ pemilik/tagihan/sekaligus  Bayar beberapa invoice dalam satu transaksi
+│  ├─ pemilik/penghuni/      Daftarkan email Google penghuni, koreksi data, sewa lagi
+│  ├─ auth/callback/         Tujuan redirect login Google (Supabase Auth)
 │  └─ teknisi/               Daftar work order, catat log servis, unggah bukti
 ├─ components/               UI per domain: keluhan, tiket, pemilik, notifikasi, layout, ui
 ├─ lib/

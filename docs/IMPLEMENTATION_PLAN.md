@@ -10,7 +10,7 @@ Deadline: minggu ke-2/3 Desember 2026.
 
 Status (25 Nov 2026):
 - Frontend keempat proses selesai dan berjalan penuh di mode mock (19 skenario E2E).
-- Backend dibangun ulang di branch `backend-v2`: PostgreSQL di Supabase, login Google lewat Supabase Auth. Fase P0 (desain) sedang berjalan, lihat §7.8.
+- Backend dibangun ulang di branch `backend-v2`: PostgreSQL di Supabase, login Google lewat Supabase Auth. P0–P2 selesai dan sudah masuk `main` (PR #4); P3 (auth + pendaftaran penghuni) sedang berjalan, lihat §7.8.
 - Backend versi pertama (SQLite, alur lama) diarsipkan di branch `backend-b0` sebagai referensi.
 
 ---
@@ -279,7 +279,7 @@ Semua tanggal dihitung relatif terhadap waktu seed.
 
 ## 5. Kontrak API (`/api/v1`)
 
-Sumber kebenaran: `contracts/openapi.yaml` (39 path, 41 operasi). Nama skema mengikuti information model SoaML (`KeluhanRequest`, `KeluhanResponse`, dan seterusnya). Tag Swagger menunjukkan layer service.
+Sumber kebenaran: `contracts/openapi.yaml` (40 path, 42 operasi). Nama skema mengikuti information model SoaML (`KeluhanRequest`, `KeluhanResponse`, dan seterusnya). Tag Swagger menunjukkan layer service.
 
 | Layer | Service | Method & path | Operasi SoaML |
 |---|---|---|---|
@@ -301,7 +301,7 @@ Sumber kebenaran: `contracts/openapi.yaml` (39 path, 41 operasi). Nama skema men
 | Task | CSM | `POST /csm/invoice/{id}/bayar`, `POST /csm/invoice/bayar-sekaligus` | Process Payment + Calculate Komisi |
 | Task | Rent Billing | `POST /rb/tagihan-sewa/terbitkan`, `POST /rb/tagihan-sewa/{id}/bayar` | Terbitkan dan bayar tagihan sewa |
 | Entity | Tenant and Lease | `GET /penghuni/me`, `GET /unit/{id_unit}/sewa` | Get ID Unit, Get Status Sewa |
-| Entity | Tenant and Lease | `GET /pemilik/unit`, `GET`/`POST /pemilik/penghuni`, `PATCH /pemilik/penghuni/{id}` | Daftar unit, Add Penghuni (pengganti sign up), koreksi data penghuni |
+| Entity | Tenant and Lease | `GET /pemilik/unit`, `GET`/`POST /pemilik/penghuni`, `PATCH /pemilik/penghuni/{id}`, `POST /pemilik/penghuni/{id}/sewa` | Daftar unit, Add Penghuni (pengganti sign up), koreksi data penghuni, Add Sewa (perpanjang/pindah unit) |
 | Entity | Complaint Ticket | `GET /tiket`, `GET /tiket/{id}`, `GET /keluhan/{id}` | Get Tiket (+ riwayat), Get Keluhan |
 | Entity | Work Order | `GET /work-order`, `GET /work-order/{id}` | Get Work Order, Get Progress Servis |
 | Entity | Invoice | `GET /invoice`, `GET /invoice/{id}` | Get Invoice |
@@ -615,7 +615,7 @@ Setiap fase dikerjakan di branch `backend-v2` dan masuk ke `main` lewat satu pul
 
 | Level | Yang diuji | Perintah |
 |---|---|---|
-| Frontend E2E (mode mock) | 19 skenario: skenario demo, validasi form, guard role, reset lewat tombol dan terminal | `npm run test:e2e` (di `frontend/`, setelah `npm run build`) |
+| Frontend E2E (mode mock) | 22 skenario: skenario demo, kelola penghuni, validasi form, guard role, reset lewat tombol dan terminal | `npm run test:e2e` (di `frontend/`, setelah build mode mock: `NEXT_PUBLIC_API_MODE=mock npm run build`) |
 | Frontend E2E (mode live) | Skenario yang sama terhadap FastAPI sungguhan, ditambah per fase (P4–P6) | `npm run test:e2e:live` |
 | Backend unit | Micro, state machine tiket dan work order, status sewa, pembulatan | `uv run pytest` (di `backend/`) |
 | Backend integrasi | Setiap endpoint: kasus berhasil, 401, 403, 404, 409, 422 | termasuk di `uv run pytest` |
@@ -640,6 +640,8 @@ CI (GitHub Actions) menjalankan ruff, pytest (dengan service container Postgres)
 | Migrasi | Dijalankan saat deploy (`alembic upgrade head` sebagai pre-deploy command Railway) | |
 | CORS | `CORS_ORIGINS` di env backend | Hanya domain Vercel + localhost |
 
+**Lingkungan uji live selama P3–P6.** Production Vercel (`main`) tetap mode mock sampai P6 selesai, supaya halaman yang backend-nya belum dibuat tidak rusak. Mode live diuji di lokal (`kosmos-dev`) dan di Preview Vercel branch `backend-v2` dengan env khusus Preview (`NEXT_PUBLIC_API_MODE=live`, URL Railway, Supabase `kosmos-demo`). Domain preview itu ditambahkan ke `CORS_ORIGINS` Railway dan Redirect URLs Supabase `kosmos-demo`.
+
 Rencana cadangan demo: frontend mode mock (`npm run dev` di `frontend/`) tetap berfungsi walaupun backend atau Supabase mati.
 
 Catatan demo: dengan `DEMO_MODE=true`, siapa pun yang tahu URL bisa masuk sebagai persona demo dan me-reset data. Ini diterima untuk demo kelas. Untuk pemakaian sungguhan, `DEMO_MODE=false`.
@@ -655,7 +657,7 @@ QR code untuk slide 44 mengarah ke URL frontend yang di-deploy.
 | 0. Fondasi | 13–15 Nov | Keputusan §2, `openapi.yaml`, scaffold Next.js + MSW | Selesai |
 | 1. Frontend Complaint Handling | 16–22 Nov | Login demo, form keluhan, dashboard penghuni dan pemilik, outbox WA | Selesai |
 | 2. Frontend Repair Verification, Billing, Rent Billing | 23–24 Nov | Halaman teknisi, tinjau tiket, estimasi, biaya tambahan, work order, invoice, bayar sekaligus, tagihan sewa, laporan kas, landing page | Selesai |
-| 3. Backend | 25 Nov–9 Des | Fase P0–P6 di §7.8 | P0 berjalan |
+| 3. Backend | 25 Nov–9 Des | Fase P0–P6 di §7.8 | P0–P2 selesai, P3 berjalan |
 | 4. Buffer | 10–14 Des | P7: bug fix, naskah demo, screenshot Swagger, QR | Belum |
 
 ---
@@ -707,7 +709,7 @@ Keputusan desain yang perlu disepakati kelompok:
    - **Bayar sekaligus**: pemilik membayar beberapa invoice perbaikan dalam satu transaksi gateway (satu `ref_gateway`, satu baris Payment per invoice). All-or-nothing: kalau gateway menolak, tidak ada invoice yang lunas.
 7. Evidence Verification versi mock memeriksa metadata (dua foto, format gambar, tidak identik, ukuran ≥ 1 KB). Versi akhir bisa memakai LLM vision seperti AI Classification.
 8. Payment gateway memakai adapter mock. Kegagalan bisa disimulasikan dari UI (checkbox demo) untuk menunjukkan cabang "Pembayaran berhasil? Tidak" di BPMN.
-9. **Pendaftaran penghuni oleh pemilik** menggantikan sign up (§7.2). Ini operasi Entity Tenant and Lease (Add Penghuni + Add Sewa), karena pemilik memang sudah tahu siapa penyewanya saat sewa dimulai.
+9. **Pendaftaran penghuni oleh pemilik** menggantikan sign up (§7.2). Ini operasi Entity Tenant and Lease (Add Penghuni + Add Sewa), karena pemilik memang sudah tahu siapa penyewanya saat sewa dimulai. Penghuni lama mendapat sewa baru (perpanjang atau pindah unit) lewat `POST /pemilik/penghuni/{id}/sewa`, tanpa akun baru; periode tidak boleh bertabrakan dengan sewa lain di unit itu (`UNIT_SUDAH_DISEWA`) atau sewa lain milik penghuni itu (`SEWA_BENTROK`).
 
 ## 12. Pertanyaan terbuka untuk kelompok
 
@@ -726,5 +728,5 @@ Keputusan desain yang perlu disepakati kelompok:
    - SoaML: consumer Layanan Pembayaran = Pemilik; operasi baru Set Penerimaan Pemilik, Add/Set Persetujuan Biaya Tambahan, Buka Ulang Tiket.
 4. Nomor kelompok di cover (4 atau 11) dan sisa template di closing D1.
 5. Tagihan sewa dan bayar sekaligus (§11b #6): tanggal jatuh tempo sewa (sekarang tanggal 10), denda keterlambatan (belum ada), dan apakah tagihan sewa diterbitkan otomatis tiap awal bulan (sekarang manual oleh pemilik).
-6. Pendaftaran penghuni (§11b #9): perpanjangan sewa untuk penghuni yang emailnya sudah terdaftar belum didukung (`409 EMAIL_SUDAH_TERDAFTAR`). Perlu diputuskan apakah masuk scope.
+6. ~~Perpanjangan sewa untuk penghuni yang emailnya sudah terdaftar?~~ Diputuskan: didukung lewat "Sewa lagi" (§11b #9).
 7. Akses dosen ke demo live: tambahkan Gmail dosen sebagai test user OAuth, atau cukup demo login.

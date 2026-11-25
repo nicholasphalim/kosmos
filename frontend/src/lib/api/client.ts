@@ -1,6 +1,7 @@
 import createClient, { type Middleware } from "openapi-fetch";
 import { config } from "@/lib/config";
 import { sessionStore } from "@/lib/session";
+import { keluarGoogle, tokenGoogle } from "@/lib/supabase";
 import { waitForMockApi } from "./mockReady";
 import type { paths } from "./schema";
 import type { ErrorResponse } from "./types";
@@ -21,13 +22,18 @@ const authMiddleware: Middleware = {
   async onRequest({ request }) {
     // Mode mock: tahan request sampai MSW siap mencegatnya.
     await waitForMockApi();
-    const token = sessionStore.getToken();
+    if (request.headers.has("Authorization")) return request; // diisi pemanggil (mis. /auth/callback)
+    const sesi = sessionStore.get();
+    const token = sesi?.sumber === "google" ? await tokenGoogle() : sesi?.token;
     if (token) request.headers.set("Authorization", `Bearer ${token}`);
     return request;
   },
-  onResponse({ response }) {
+  async onResponse({ response }) {
     // Token tidak valid: keluarkan sesi supaya guard mengarahkan ke /login.
-    if (response.status === 401) sessionStore.clear();
+    if (response.status === 401 && sessionStore.get()) {
+      if (sessionStore.get()?.sumber === "google") await keluarGoogle();
+      sessionStore.clear();
+    }
     return response;
   },
 };

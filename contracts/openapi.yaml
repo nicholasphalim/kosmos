@@ -691,11 +691,42 @@ paths:
         "409": { $ref: "#/components/responses/Error" }
         "422": { $ref: "#/components/responses/Error" }
 
+  /pemilik/penghuni/{id_pengguna}/sewa:
+    post:
+      tags: ["Entity: Tenant and Lease"]
+      operationId: addSewaPenghuni
+      summary: >-
+        Sewa baru untuk penghuni yang sudah terdaftar (perpanjang atau pindah unit), tanpa membuat akun baru.
+        409 UNIT_SUDAH_DISEWA bila unit terisi pada periode itu, 409 SEWA_BENTROK bila penghuni masih punya
+        sewa lain pada periode yang sama.
+      parameters:
+        - name: id_pengguna
+          in: path
+          required: true
+          schema: { type: integer }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/SewaBaruRequest" }
+      responses:
+        "201":
+          description: Sewa dibuat
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/PenghuniTerdaftar" }
+        "403": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+        "409": { $ref: "#/components/responses/Error" }
+        "422": { $ref: "#/components/responses/Error" }
+
   /unit/{id_unit}/sewa:
     get:
       tags: ["Entity: Tenant and Lease"]
       operationId: getStatusSewa
-      summary: Get Status Sewa sebuah unit
+      summary: >-
+        Get Status Sewa sebuah unit (sewa terbaru). Hanya pemilik unit atau penghuni yang pernah menyewa
+        unit itu; selain itu 404.
       parameters:
         - name: id_unit
           in: path
@@ -940,6 +971,14 @@ components:
         nama: { type: string, minLength: 2, maxLength: 100 }
         email: { type: string, format: email, maxLength: 254 }
         no_wa: { type: string, minLength: 8, maxLength: 20 }
+        id_unit: { type: integer }
+        tanggal_mulai: { type: string, format: date }
+        tanggal_selesai: { type: string, format: date }
+
+    SewaBaruRequest:
+      type: object
+      required: [id_unit, tanggal_mulai, tanggal_selesai]
+      properties:
         id_unit: { type: integer }
         tanggal_mulai: { type: string, format: date }
         tanggal_selesai: { type: string, format: date }

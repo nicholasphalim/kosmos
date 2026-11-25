@@ -541,6 +541,23 @@ export interface paths {
         patch: operations["ubahPenghuni"];
         trace?: never;
     };
+    "/pemilik/penghuni/{id_pengguna}/sewa": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Sewa baru untuk penghuni yang sudah terdaftar (perpanjang atau pindah unit), tanpa membuat akun baru. 409 UNIT_SUDAH_DISEWA bila unit terisi pada periode itu, 409 SEWA_BENTROK bila penghuni masih punya sewa lain pada periode yang sama. */
+        post: operations["addSewaPenghuni"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/unit/{id_unit}/sewa": {
         parameters: {
             query?: never;
@@ -548,7 +565,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Get Status Sewa sebuah unit */
+        /** Get Status Sewa sebuah unit (sewa terbaru). Hanya pemilik unit atau penghuni yang pernah menyewa unit itu; selain itu 404. */
         get: operations["getStatusSewa"];
         put?: never;
         post?: never;
@@ -739,6 +756,13 @@ export interface components {
             /** Format: email */
             email: string;
             no_wa: string;
+            id_unit: number;
+            /** Format: date */
+            tanggal_mulai: string;
+            /** Format: date */
+            tanggal_selesai: string;
+        };
+        SewaBaruRequest: {
             id_unit: number;
             /** Format: date */
             tanggal_mulai: string;
@@ -2094,6 +2118,36 @@ export interface operations {
         responses: {
             /** @description OK */
             200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PenghuniTerdaftar"];
+                };
+            };
+            403: components["responses"]["Error"];
+            404: components["responses"]["Error"];
+            409: components["responses"]["Error"];
+            422: components["responses"]["Error"];
+        };
+    };
+    addSewaPenghuni: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id_pengguna: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SewaBaruRequest"];
+            };
+        };
+        responses: {
+            /** @description Sewa dibuat */
+            201: {
                 headers: {
                     [name: string]: unknown;
                 };

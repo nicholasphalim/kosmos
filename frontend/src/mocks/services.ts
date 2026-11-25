@@ -22,6 +22,7 @@ import type {
   PenghuniBaruRequest,
   PenghuniTerdaftar,
   ProfilPenghuni,
+  SewaBaruRequest,
   UbahPenghuniRequest,
   UnitPemilik,
   StatusSewa,
@@ -375,6 +376,45 @@ export const tenantLease = {
     if (noWa !== undefined) p.no_wa = noWa;
     commit();
     return tenantLease.penghuniTerdaftar(p, sw);
+  },
+
+  /** Sewa baru untuk penghuni lama (perpanjang atau pindah unit). */
+  addSewa(user: PenggunaRow, idPengguna: number, req: SewaBaruRequest): PenghuniTerdaftar {
+    auth.requireRole(user, "pemilik");
+    if (!tenantLease.sewaTerbaruPerPenghuni(user.id).has(idPengguna)) {
+      throw new ServiceError(404, "PENGHUNI_TIDAK_ADA", "Penghuni tidak ditemukan di properti Anda.");
+    }
+    if (!req.tanggal_mulai || !req.tanggal_selesai || req.tanggal_mulai > req.tanggal_selesai) {
+      throw new ServiceError(422, "VALIDASI_GAGAL", "Tanggal selesai sewa harus setelah tanggal mulai.");
+    }
+    if (!tenantLease.unitMilik(user.id).some((u) => u.id === req.id_unit)) {
+      throw new ServiceError(404, "UNIT_TIDAK_ADA", "Unit tidak ditemukan di properti Anda.");
+    }
+    const beririsan = (s: SewaRow) => s.tanggal_mulai <= req.tanggal_selesai && req.tanggal_mulai <= s.tanggal_selesai;
+    if (db().sewa.some((s) => s.id_unit === req.id_unit && beririsan(s))) {
+      throw new ServiceError(409, "UNIT_SUDAH_DISEWA", "Periode sewa bertabrakan dengan sewa lain di unit ini.");
+    }
+    if (db().sewa.some((s) => s.id_penghuni === idPengguna && beririsan(s))) {
+      throw new ServiceError(409, "SEWA_BENTROK", "Penghuni masih punya sewa lain pada periode itu.");
+    }
+    const sw: SewaRow = {
+      id: Math.max(0, ...db().sewa.map((x) => x.id)) + 1,
+      id_unit: req.id_unit, id_penghuni: idPengguna, tanggal_mulai: req.tanggal_mulai, tanggal_selesai: req.tanggal_selesai,
+    };
+    db().sewa.push(sw);
+    commit();
+    return tenantLease.penghuniTerdaftar(tenantLease.pengguna(idPengguna), sw);
+  },
+
+  /** GET /unit/{id}/sewa: hanya pemilik unit atau penghuni yang pernah menyewa unit itu. */
+  statusSewaUntuk(user: PenggunaRow, idUnit: number): StatusSewa {
+    const unit = db().unit.find((u) => u.id === idUnit);
+    const boleh =
+      unit !== undefined &&
+      (tenantLease.unitRingkas(idUnit).id_pemilik === user.id ||
+        db().sewa.some((s) => s.id_unit === idUnit && s.id_penghuni === user.id));
+    if (!boleh) throw new ServiceError(404, "UNIT_TIDAK_ADA", "Unit tidak ditemukan.");
+    return tenantLease.getStatusSewa(idUnit);
   },
 };
 
