@@ -1397,11 +1397,10 @@ export const rb = {
     const tr = new Tracer();
     const sekarang = new Date();
     const periode = periodeDari(sekarang);
-    const awal = `${periode}-01`;
-    const akhir = new Date(sekarang.getFullYear(), sekarang.getMonth() + 1, 0).toISOString().slice(0, 10);
     await tr.run("Rent Billing", "Task", `terbitkanTagihanSewa(${periode})`, 2, () => null);
+    // Hanya sewa yang aktif hari ini (sama dengan seed dan plan §11b #6); sewa yang berakhir awal bulan tidak ditagih lagi.
     const sewaAktif = await tr.run("Tenant and Lease", "Entity", (r: SewaRow[]) => `getSewaAktif(pemilik=${user.id}) → ${r.length} sewa`, jitter(4, 8), () =>
-      db().sewa.filter((sw) => tenantLease.unitRingkas(sw.id_unit).id_pemilik === user.id && sw.tanggal_mulai <= akhir && sw.tanggal_selesai >= awal),
+      tenantLease.unitMilik(user.id).map((u) => tenantLease.sewaAktif(u.id)).filter((sw): sw is SewaRow => sw !== null),
     );
     const dibuat = await tr.run("Rent Invoice", "Entity", (r: TagihanSewaRow[]) => `addTagihanSewa × ${r.length}`, jitter(6, 12), () =>
       sewaAktif
