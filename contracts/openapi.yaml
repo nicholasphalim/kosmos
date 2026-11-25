@@ -1,9 +1,10 @@
 openapi: 3.1.0
 info:
   title: Kosmos API — Complaint Handling, Repair Verification, Billing & Commission
-  version: 0.2.0
+  version: 0.3.0
   description: |
-    Kontrak layanan SOAML untuk tiga proses bisnis Kosmos.
+    Kontrak layanan SOAML untuk proses bisnis Kosmos.
+    Autentikasi: Bearer JWT dari Supabase Auth (login Google), atau JWT demo dari /auth/demo-login bila DEMO_MODE=true.
     Tag menunjukkan layer service hasil Deliverable 1:
     Task (Handle Maintenance Request, Complete and Settle Maintenance, Rent Billing),
     Micro (Technician Matching, Cost Estimation, Evidence Verification, Commission Calculation),
@@ -16,7 +17,14 @@ servers:
 security:
   - bearerAuth: []
 tags:
+  - name: Auth
+    description: >-
+      Login Google lewat Supabase Auth. Frontend mengirim JWT Supabase sebagai Bearer token,
+      backend memverifikasinya lalu mencocokkan email dengan tabel pengguna untuk menentukan role.
   - name: Auth (demo)
+    description: Login cepat dengan akun demo. Hanya tersedia bila server berjalan dengan DEMO_MODE=true (404 bila tidak).
+  - name: Dev (demo)
+    description: Alat bantu demo. Hanya tersedia bila DEMO_MODE=true.
   - name: "Task: Handle Maintenance Request"
   - name: "Task: Complete and Settle Maintenance"
   - name: "Task: Rent Billing"
@@ -64,6 +72,22 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/LoginResponse" }
         "404": { $ref: "#/components/responses/Error" }
+
+  /auth/me:
+    get:
+      tags: [Auth]
+      operationId: getPenggunaSaya
+      summary: >-
+        Pengguna yang sedang login beserta role-nya. Dipanggil frontend setelah login Google.
+        403 EMAIL_BELUM_TERDAFTAR bila email Google belum didaftarkan pemilik atau admin.
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/PenggunaSaya" }
+        "401": { $ref: "#/components/responses/Error" }
+        "403": { $ref: "#/components/responses/Error" }
 
   /hmr/keluhan:
     post:
@@ -587,6 +611,86 @@ paths:
         "401": { $ref: "#/components/responses/Error" }
         "403": { $ref: "#/components/responses/Error" }
 
+  /pemilik/unit:
+    get:
+      tags: ["Entity: Tenant and Lease"]
+      operationId: listUnitPemilik
+      summary: Daftar unit di properti milik pemilik yang login, beserta penghuni dan sewa yang sedang aktif
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/UnitPemilik" }
+        "403": { $ref: "#/components/responses/Error" }
+
+  /pemilik/penghuni:
+    get:
+      tags: ["Entity: Tenant and Lease"]
+      operationId: listPenghuniTerdaftar
+      summary: Daftar penghuni yang pernah atau sedang menyewa unit di properti milik pemilik
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/PenghuniTerdaftar" }
+        "403": { $ref: "#/components/responses/Error" }
+    post:
+      tags: ["Entity: Tenant and Lease"]
+      operationId: addPenghuni
+      summary: >-
+        Pemilik mendaftarkan penghuni baru (email Google + unit + periode sewa).
+        Setelah terdaftar, penghuni bisa login dengan akun Google dari email tersebut.
+        409 EMAIL_SUDAH_TERDAFTAR atau UNIT_SUDAH_DISEWA (periode bertabrakan dengan sewa lain).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/PenghuniBaruRequest" }
+      responses:
+        "201":
+          description: Terdaftar
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/PenghuniTerdaftar" }
+        "403": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+        "409": { $ref: "#/components/responses/Error" }
+        "422": { $ref: "#/components/responses/Error" }
+
+  /pemilik/penghuni/{id_pengguna}:
+    patch:
+      tags: ["Entity: Tenant and Lease"]
+      operationId: ubahPenghuni
+      summary: >-
+        Koreksi nama, email, atau nomor WhatsApp penghuni. Email hanya bisa diubah selama
+        penghuni belum pernah login Google (409 SUDAH_TERHUBUNG).
+      parameters:
+        - name: id_pengguna
+          in: path
+          required: true
+          schema: { type: integer }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/UbahPenghuniRequest" }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/PenghuniTerdaftar" }
+        "403": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+        "409": { $ref: "#/components/responses/Error" }
+        "422": { $ref: "#/components/responses/Error" }
+
   /unit/{id_unit}/sewa:
     get:
       tags: ["Entity: Tenant and Lease"]
@@ -705,6 +809,17 @@ paths:
                 type: array
                 items: { $ref: "#/components/schemas/Notifikasi" }
 
+  /dev/reset:
+    post:
+      tags: [Dev (demo)]
+      operationId: resetDataDemo
+      security: []
+      summary: Hapus semua data lalu isi ulang data seed demo. Hanya tersedia bila DEMO_MODE=true
+      responses:
+        "204":
+          description: Data demo sudah dikembalikan ke kondisi awal
+        "404": { $ref: "#/components/responses/Error" }
+
 components:
   securitySchemes:
     bearerAuth:
@@ -776,6 +891,66 @@ components:
         id: { type: integer }
         nama: { type: string }
         role: { $ref: "#/components/schemas/Role" }
+
+    PenggunaSaya:
+      type: object
+      required: [id, nama, role, email]
+      properties:
+        id: { type: integer }
+        nama: { type: string }
+        role: { $ref: "#/components/schemas/Role" }
+        email: { type: string, format: email }
+
+    UnitPemilik:
+      type: object
+      required: [id, nomor_unit, nama_properti, harga_bulanan, penghuni, sewa]
+      properties:
+        id: { type: integer }
+        nomor_unit: { type: string, examples: [A-102] }
+        nama_properti: { type: string, examples: [Kos Melati] }
+        harga_bulanan: { type: integer, examples: [1200000] }
+        penghuni:
+          description: Penghuni dengan sewa aktif hari ini. null bila unit kosong
+          oneOf:
+            - { $ref: "#/components/schemas/Pengguna" }
+            - { type: "null" }
+        sewa:
+          description: Sewa aktif hari ini. null bila unit kosong
+          oneOf:
+            - { $ref: "#/components/schemas/StatusSewa" }
+            - { type: "null" }
+
+    PenghuniTerdaftar:
+      type: object
+      required: [pengguna, email, no_wa, unit, sewa, terhubung_google]
+      properties:
+        pengguna: { $ref: "#/components/schemas/Pengguna" }
+        email: { type: string, format: email }
+        no_wa: { type: string, examples: [0812-3456-7890] }
+        unit: { $ref: "#/components/schemas/UnitRingkas" }
+        sewa: { $ref: "#/components/schemas/StatusSewa" }
+        terhubung_google:
+          type: boolean
+          description: true bila penghuni sudah pernah login dengan akun Google dari email ini
+
+    PenghuniBaruRequest:
+      type: object
+      required: [nama, email, no_wa, id_unit, tanggal_mulai, tanggal_selesai]
+      properties:
+        nama: { type: string, minLength: 2, maxLength: 100 }
+        email: { type: string, format: email, maxLength: 254 }
+        no_wa: { type: string, minLength: 8, maxLength: 20 }
+        id_unit: { type: integer }
+        tanggal_mulai: { type: string, format: date }
+        tanggal_selesai: { type: string, format: date }
+
+    UbahPenghuniRequest:
+      type: object
+      minProperties: 1
+      properties:
+        nama: { type: string, minLength: 2, maxLength: 100 }
+        email: { type: string, format: email, maxLength: 254 }
+        no_wa: { type: string, minLength: 8, maxLength: 20 }
 
     AkunDemo:
       type: object
