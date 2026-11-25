@@ -18,7 +18,12 @@ import type {
   Lampiran,
   Notifikasi,
   Pengguna,
+  PenggunaSaya,
+  PenghuniBaruRequest,
+  PenghuniTerdaftar,
   ProfilPenghuni,
+  UbahPenghuniRequest,
+  UnitPemilik,
   StatusSewa,
   StatusTiket,
   TiketDetail,
@@ -148,6 +153,11 @@ export const auth = {
     }
   },
 
+  /** GET /auth/me. Di backend, pengguna dicari dari email di JWT Supabase. */
+  me(user: PenggunaRow): PenggunaSaya {
+    return { ...toPengguna(user), email: user.email };
+  },
+
   akunDemo(): AkunDemo[] {
     const ids = [1, 2, 3, 4, 8, 9, 10];
     return ids.map((id) => {
@@ -236,7 +246,140 @@ export const tenantLease = {
     const p = db().properti.find((x) => x.id === u.id_properti)!;
     return { lat: p.lat, lng: p.lng };
   },
+
+  /* ----- Pendaftaran penghuni oleh pemilik (pengganti sign up) ----- */
+
+  /** Unit di properti milik pemilik. */
+  unitMilik(idPemilik: number) {
+    const idProperti = new Set(db().properti.filter((p) => p.id_pemilik === idPemilik).map((p) => p.id));
+    return db().unit.filter((u) => idProperti.has(u.id_properti));
+  },
+
+  /** Sewa yang aktif hari ini di sebuah unit, atau null. */
+  sewaAktif(idUnit: number): SewaRow | null {
+    const hariIni = new Date().toISOString().slice(0, 10);
+    return db().sewa.find((s) => s.id_unit === idUnit && s.tanggal_mulai <= hariIni && hariIni <= s.tanggal_selesai) ?? null;
+  },
+
+  listUnitPemilik(user: PenggunaRow): UnitPemilik[] {
+    auth.requireRole(user, "pemilik");
+    return tenantLease.unitMilik(user.id).map((u) => {
+      const { id_pemilik: _, ...ringkas } = tenantLease.unitRingkas(u.id);
+      const sw = tenantLease.sewaAktif(u.id);
+      return {
+        ...ringkas,
+        harga_bulanan: u.harga_bulanan,
+        penghuni: sw ? toPengguna(tenantLease.pengguna(sw.id_penghuni)) : null,
+        sewa: sw ? tenantLease.getStatusSewa(u.id) : null,
+      };
+    });
+  },
+
+  /** Satu baris per penghuni: sewa terbarunya di properti pemilik. */
+  penghuniTerdaftar(p: PenggunaRow, sw: SewaRow): PenghuniTerdaftar {
+    const { id_pemilik: _, ...unit } = tenantLease.unitRingkas(sw.id_unit);
+    const hariIni = new Date().toISOString().slice(0, 10);
+    return {
+      pengguna: toPengguna(p),
+      email: p.email,
+      no_wa: p.no_wa,
+      unit,
+      sewa: {
+        id_unit: sw.id_unit,
+        status_sewa: sw.tanggal_mulai <= hariIni && hariIni <= sw.tanggal_selesai ? "aktif" : "tidak_aktif",
+        tanggal_mulai: sw.tanggal_mulai,
+        tanggal_selesai: sw.tanggal_selesai,
+      },
+      terhubung_google: p.auth_user_id !== null,
+    };
+  },
+
+  /** Sewa terbaru tiap penghuni di unit milik pemilik. */
+  sewaTerbaruPerPenghuni(idPemilik: number): Map<number, SewaRow> {
+    const idUnit = new Set(tenantLease.unitMilik(idPemilik).map((u) => u.id));
+    const hasil = new Map<number, SewaRow>();
+    for (const sw of db().sewa.filter((s) => idUnit.has(s.id_unit))) {
+      const lama = hasil.get(sw.id_penghuni);
+      if (!lama || sw.tanggal_mulai > lama.tanggal_mulai) hasil.set(sw.id_penghuni, sw);
+    }
+    return hasil;
+  },
+
+  listPenghuni(user: PenggunaRow): PenghuniTerdaftar[] {
+    auth.requireRole(user, "pemilik");
+    return [...tenantLease.sewaTerbaruPerPenghuni(user.id).entries()]
+      .map(([idPenghuni, sw]) => tenantLease.penghuniTerdaftar(tenantLease.pengguna(idPenghuni), sw))
+      .sort((a, b) => a.pengguna.nama.localeCompare(b.pengguna.nama));
+  },
+
+  addPenghuni(user: PenggunaRow, req: PenghuniBaruRequest): PenghuniTerdaftar {
+    auth.requireRole(user, "pemilik");
+    const nama = req.nama?.trim() ?? "";
+    const email = normalisasiEmail(req.email);
+    const noWa = req.no_wa?.trim() ?? "";
+    if (nama.length < 2) throw new ServiceError(422, "VALIDASI_GAGAL", "Nama minimal 2 karakter.");
+    if (!EMAIL_RE.test(email)) throw new ServiceError(422, "VALIDASI_GAGAL", "Format email tidak valid.");
+    if (noWa.length < 8) throw new ServiceError(422, "VALIDASI_GAGAL", "Nomor WhatsApp tidak valid.");
+    if (!req.tanggal_mulai || !req.tanggal_selesai || req.tanggal_mulai > req.tanggal_selesai) {
+      throw new ServiceError(422, "VALIDASI_GAGAL", "Tanggal selesai sewa harus setelah tanggal mulai.");
+    }
+    if (!tenantLease.unitMilik(user.id).some((u) => u.id === req.id_unit)) {
+      throw new ServiceError(404, "UNIT_TIDAK_ADA", "Unit tidak ditemukan di properti Anda.");
+    }
+    if (db().pengguna.some((p) => p.email === email)) {
+      throw new ServiceError(409, "EMAIL_SUDAH_TERDAFTAR", "Email ini sudah terdaftar.");
+    }
+    const bentrok = db().sewa.some(
+      (s) => s.id_unit === req.id_unit && s.tanggal_mulai <= req.tanggal_selesai && req.tanggal_mulai <= s.tanggal_selesai,
+    );
+    if (bentrok) throw new ServiceError(409, "UNIT_SUDAH_DISEWA", "Periode sewa bertabrakan dengan sewa lain di unit ini.");
+
+    const p: PenggunaRow = {
+      id: Math.max(...db().pengguna.map((x) => x.id)) + 1,
+      nama, role: "penghuni", no_wa: noWa, email, auth_user_id: null,
+    };
+    const sw: SewaRow = {
+      id: Math.max(0, ...db().sewa.map((x) => x.id)) + 1,
+      id_unit: req.id_unit, id_penghuni: p.id, tanggal_mulai: req.tanggal_mulai, tanggal_selesai: req.tanggal_selesai,
+    };
+    db().pengguna.push(p);
+    db().sewa.push(sw);
+    commit();
+    return tenantLease.penghuniTerdaftar(p, sw);
+  },
+
+  ubahPenghuni(user: PenggunaRow, idPengguna: number, req: UbahPenghuniRequest): PenghuniTerdaftar {
+    auth.requireRole(user, "pemilik");
+    const sw = tenantLease.sewaTerbaruPerPenghuni(user.id).get(idPengguna);
+    if (!sw) throw new ServiceError(404, "PENGHUNI_TIDAK_ADA", "Penghuni tidak ditemukan di properti Anda.");
+    const p = tenantLease.pengguna(idPengguna);
+    if (req.nama === undefined && req.email === undefined && req.no_wa === undefined) {
+      throw new ServiceError(422, "VALIDASI_GAGAL", "Tidak ada data yang diubah.");
+    }
+    const nama = req.nama?.trim();
+    const noWa = req.no_wa?.trim();
+    const email = req.email === undefined ? undefined : normalisasiEmail(req.email);
+    if (nama !== undefined && nama.length < 2) throw new ServiceError(422, "VALIDASI_GAGAL", "Nama minimal 2 karakter.");
+    if (noWa !== undefined && noWa.length < 8) throw new ServiceError(422, "VALIDASI_GAGAL", "Nomor WhatsApp tidak valid.");
+    if (email !== undefined && email !== p.email) {
+      if (!EMAIL_RE.test(email)) throw new ServiceError(422, "VALIDASI_GAGAL", "Format email tidak valid.");
+      if (p.auth_user_id !== null) {
+        throw new ServiceError(409, "SUDAH_TERHUBUNG", "Email tidak bisa diubah karena penghuni sudah login dengan akun Google.");
+      }
+      if (db().pengguna.some((x) => x.email === email)) {
+        throw new ServiceError(409, "EMAIL_SUDAH_TERDAFTAR", "Email ini sudah terdaftar.");
+      }
+      p.email = email;
+    }
+    if (nama !== undefined) p.nama = nama;
+    if (noWa !== undefined) p.no_wa = noWa;
+    commit();
+    return tenantLease.penghuniTerdaftar(p, sw);
+  },
 };
+
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const normalisasiEmail = (email: string | undefined) => (email ?? "").trim().toLowerCase();
 
 /* ===================================================================== */
 /* Entity: Complaint Ticket                                               */
@@ -1254,11 +1397,10 @@ export const rb = {
     const tr = new Tracer();
     const sekarang = new Date();
     const periode = periodeDari(sekarang);
-    const awal = `${periode}-01`;
-    const akhir = new Date(sekarang.getFullYear(), sekarang.getMonth() + 1, 0).toISOString().slice(0, 10);
     await tr.run("Rent Billing", "Task", `terbitkanTagihanSewa(${periode})`, 2, () => null);
+    // Hanya sewa yang aktif hari ini (sama dengan seed dan plan §11b #6); sewa yang berakhir awal bulan tidak ditagih lagi.
     const sewaAktif = await tr.run("Tenant and Lease", "Entity", (r: SewaRow[]) => `getSewaAktif(pemilik=${user.id}) → ${r.length} sewa`, jitter(4, 8), () =>
-      db().sewa.filter((sw) => tenantLease.unitRingkas(sw.id_unit).id_pemilik === user.id && sw.tanggal_mulai <= akhir && sw.tanggal_selesai >= awal),
+      tenantLease.unitMilik(user.id).map((u) => tenantLease.sewaAktif(u.id)).filter((sw): sw is SewaRow => sw !== null),
     );
     const dibuat = await tr.run("Rent Invoice", "Entity", (r: TagihanSewaRow[]) => `addTagihanSewa × ${r.length}`, jitter(6, 12), () =>
       sewaAktif

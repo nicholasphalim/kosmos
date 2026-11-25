@@ -7,7 +7,16 @@ import { labelPeriode } from "@/lib/format";
 import { estimasiBiaya, hitungKomisi, jarakKm, verifikasiBukti } from "./micro";
 import type { BiayaTambahan, Kategori, LogServis, MetodePembayaran, Penanganan, RincianBiaya, Role, StatusTiket, StatusWorkOrder, Urgensi, KandidatTeknisi } from "@/lib/api/types";
 
-export type PenggunaRow = { id: number; nama: string; role: Role; no_wa: string };
+export type PenggunaRow = {
+  id: number;
+  nama: string;
+  role: Role;
+  no_wa: string;
+  /** Email Google yang didaftarkan pemilik/admin. Login Google dicocokkan lewat email ini. */
+  email: string;
+  /** ID akun Supabase Auth, terisi saat pertama kali login Google. Mode mock selalu null. */
+  auth_user_id: string | null;
+};
 export type PropertiRow = { id: number; nama: string; id_pemilik: number; lat: number; lng: number };
 export type UnitRow = { id: number; id_properti: number; nomor_unit: string; harga_bulanan: number };
 export type SewaRow = {
@@ -179,7 +188,7 @@ export type TransaksiKasRow = {
 };
 
 export type MockDb = {
-  version: 5;
+  version: 6;
   seq: {
     keluhan: number; tiket: number; lampiran: number; notifikasi: number;
     estimasi: number; work_order: number; invoice: number; pembayaran: number; kas: number; biaya_tambahan: number; tagihan_sewa: number;
@@ -203,7 +212,7 @@ export type MockDb = {
   kas: TransaksiKasRow[];
 };
 
-const STORAGE_KEY = "kosmos.mockdb.v5";
+const STORAGE_KEY = "kosmos.mockdb.v6";
 
 /* ---------- Seed ---------- */
 
@@ -225,21 +234,21 @@ function tanggalGeser(hari: number, dari = new Date()) {
 function seed(): MockDb {
   const now = new Date();
   const db: MockDb = {
-    version: 5,
+    version: 6,
     seq: { keluhan: 102, tiket: 58, lampiran: 1, notifikasi: 1, estimasi: 1, work_order: 9, invoice: 1, pembayaran: 1, kas: 1, biaya_tambahan: 1, tagihan_sewa: 1 },
     pengguna: [
-      { id: 1, nama: "Dea", role: "penghuni", no_wa: "0812-xxxx-0101" },
-      { id: 2, nama: "Qiqa", role: "penghuni", no_wa: "0813-xxxx-0102" },
-      { id: 3, nama: "Fredo", role: "penghuni", no_wa: "0815-xxxx-0201" },
-      { id: 4, nama: "Pak Derren", role: "pemilik", no_wa: "0812-xxxx-1101" },
-      { id: 5, nama: "Halim", role: "penghuni", no_wa: "0817-xxxx-0202" },
-      { id: 6, nama: "Nicholas", role: "penghuni", no_wa: "0819-xxxx-0103" },
-      { id: 7, nama: "Putra", role: "penghuni", no_wa: "0821-xxxx-0104" },
-      { id: 8, nama: "Pak Slamet", role: "teknisi", no_wa: "0838-xxxx-2201" },
-      { id: 9, nama: "Mas Bayu", role: "teknisi", no_wa: "0857-xxxx-2202" },
-      { id: 10, nama: "Bang Ucok", role: "teknisi", no_wa: "0878-xxxx-2203" },
-      { id: 11, nama: "Mas Andi", role: "teknisi", no_wa: "0896-xxxx-2204" },
-      { id: 12, nama: "Pak Joko", role: "teknisi", no_wa: "0811-xxxx-2205" },
+      { id: 1, nama: "Dea", role: "penghuni", no_wa: "0812-xxxx-0101", email: "dea@kosmos.test", auth_user_id: null },
+      { id: 2, nama: "Qiqa", role: "penghuni", no_wa: "0813-xxxx-0102", email: "qiqa@kosmos.test", auth_user_id: null },
+      { id: 3, nama: "Fredo", role: "penghuni", no_wa: "0815-xxxx-0201", email: "fredo@kosmos.test", auth_user_id: null },
+      { id: 4, nama: "Pak Derren", role: "pemilik", no_wa: "0812-xxxx-1101", email: "derren@kosmos.test", auth_user_id: null },
+      { id: 5, nama: "Halim", role: "penghuni", no_wa: "0817-xxxx-0202", email: "halim@kosmos.test", auth_user_id: null },
+      { id: 6, nama: "Nicholas", role: "penghuni", no_wa: "0819-xxxx-0103", email: "nicholas@kosmos.test", auth_user_id: null },
+      { id: 7, nama: "Putra", role: "penghuni", no_wa: "0821-xxxx-0104", email: "putra@kosmos.test", auth_user_id: null },
+      { id: 8, nama: "Pak Slamet", role: "teknisi", no_wa: "0838-xxxx-2201", email: "slamet@kosmos.test", auth_user_id: null },
+      { id: 9, nama: "Mas Bayu", role: "teknisi", no_wa: "0857-xxxx-2202", email: "bayu@kosmos.test", auth_user_id: null },
+      { id: 10, nama: "Bang Ucok", role: "teknisi", no_wa: "0878-xxxx-2203", email: "ucok@kosmos.test", auth_user_id: null },
+      { id: 11, nama: "Mas Andi", role: "teknisi", no_wa: "0896-xxxx-2204", email: "andi@kosmos.test", auth_user_id: null },
+      { id: 12, nama: "Pak Joko", role: "teknisi", no_wa: "0811-xxxx-2205", email: "joko@kosmos.test", auth_user_id: null },
     ],
     properti: [
       { id: 1, nama: "Kos Melati", id_pemilik: 4, lat: -6.879, lng: 107.6105 },
@@ -537,7 +546,7 @@ export function db(): MockDb {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (raw) {
       const parsed = JSON.parse(raw) as MockDb;
-      if (parsed.version === 5) return (instance = parsed);
+      if (parsed.version === 6) return (instance = parsed);
     }
   } catch {
     /* data rusak: seed ulang */
@@ -545,6 +554,12 @@ export function db(): MockDb {
   instance = seed();
   commit();
   return instance;
+}
+
+/** Kembalikan database ke data seed (POST /dev/reset). */
+export function resetDb() {
+  instance = seed();
+  commit();
 }
 
 /** Simpan perubahan. Dipanggil setiap selesai operasi tulis (mirip COMMIT transaksi). */

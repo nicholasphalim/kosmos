@@ -14,6 +14,11 @@ export type Penanganan = S["Penanganan"];
 export type Layer = S["Layer"];
 
 export type Pengguna = S["Pengguna"];
+export type PenggunaSaya = S["PenggunaSaya"];
+export type UnitPemilik = S["UnitPemilik"];
+export type PenghuniTerdaftar = S["PenghuniTerdaftar"];
+export type PenghuniBaruRequest = S["PenghuniBaruRequest"];
+export type UbahPenghuniRequest = S["UbahPenghuniRequest"];
 export type AkunDemo = S["AkunDemo"];
 export type LoginResponse = S["LoginResponse"];
 export type UnitRingkas = S["UnitRingkas"];

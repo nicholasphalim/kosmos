@@ -38,6 +38,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/auth/me": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Pengguna yang sedang login beserta role-nya. Dipanggil frontend setelah login Google. 403 EMAIL_BELUM_TERDAFTAR bila email Google belum didaftarkan pemilik atau admin. */
+        get: operations["getPenggunaSaya"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/hmr/keluhan": {
         parameters: {
             query?: never;
@@ -472,6 +489,58 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/pemilik/unit": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Daftar unit di properti milik pemilik yang login, beserta penghuni dan sewa yang sedang aktif */
+        get: operations["listUnitPemilik"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/pemilik/penghuni": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Daftar penghuni yang pernah atau sedang menyewa unit di properti milik pemilik */
+        get: operations["listPenghuniTerdaftar"];
+        put?: never;
+        /** Pemilik mendaftarkan penghuni baru (email Google + unit + periode sewa). Setelah terdaftar, penghuni bisa login dengan akun Google dari email tersebut. 409 EMAIL_SUDAH_TERDAFTAR atau UNIT_SUDAH_DISEWA (periode bertabrakan dengan sewa lain). */
+        post: operations["addPenghuni"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/pemilik/penghuni/{id_pengguna}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Koreksi nama, email, atau nomor WhatsApp penghuni. Email hanya bisa diubah selama penghuni belum pernah login Google (409 SUDAH_TERHUBUNG). */
+        patch: operations["ubahPenghuni"];
+        trace?: never;
+    };
     "/unit/{id_unit}/sewa": {
         parameters: {
             query?: never;
@@ -591,6 +660,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/dev/reset": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Hapus semua data lalu isi ulang data seed demo. Hanya tersedia bila DEMO_MODE=true */
+        post: operations["resetDataDemo"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -616,6 +702,54 @@ export interface components {
             id: number;
             nama: string;
             role: components["schemas"]["Role"];
+        };
+        PenggunaSaya: {
+            id: number;
+            nama: string;
+            role: components["schemas"]["Role"];
+            /** Format: email */
+            email: string;
+        };
+        UnitPemilik: {
+            id: number;
+            /** @example A-102 */
+            nomor_unit: string;
+            /** @example Kos Melati */
+            nama_properti: string;
+            /** @example 1200000 */
+            harga_bulanan: number;
+            /** @description Penghuni dengan sewa aktif hari ini. null bila unit kosong */
+            penghuni: components["schemas"]["Pengguna"] | null;
+            /** @description Sewa aktif hari ini. null bila unit kosong */
+            sewa: components["schemas"]["StatusSewa"] | null;
+        };
+        PenghuniTerdaftar: {
+            pengguna: components["schemas"]["Pengguna"];
+            /** Format: email */
+            email: string;
+            /** @example 0812-3456-7890 */
+            no_wa: string;
+            unit: components["schemas"]["UnitRingkas"];
+            sewa: components["schemas"]["StatusSewa"];
+            /** @description true bila penghuni sudah pernah login dengan akun Google dari email ini */
+            terhubung_google: boolean;
+        };
+        PenghuniBaruRequest: {
+            nama: string;
+            /** Format: email */
+            email: string;
+            no_wa: string;
+            id_unit: number;
+            /** Format: date */
+            tanggal_mulai: string;
+            /** Format: date */
+            tanggal_selesai: string;
+        };
+        UbahPenghuniRequest: {
+            nama?: string;
+            /** Format: email */
+            email?: string;
+            no_wa?: string;
         };
         AkunDemo: {
             pengguna: components["schemas"]["Pengguna"];
@@ -1164,6 +1298,28 @@ export interface operations {
                 };
             };
             404: components["responses"]["Error"];
+        };
+    };
+    getPenggunaSaya: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PenggunaSaya"];
+                };
+            };
+            401: components["responses"]["Error"];
+            403: components["responses"]["Error"];
         };
     };
     ajukanKeluhan: {
@@ -1851,6 +2007,106 @@ export interface operations {
             403: components["responses"]["Error"];
         };
     };
+    listUnitPemilik: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UnitPemilik"][];
+                };
+            };
+            403: components["responses"]["Error"];
+        };
+    };
+    listPenghuniTerdaftar: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PenghuniTerdaftar"][];
+                };
+            };
+            403: components["responses"]["Error"];
+        };
+    };
+    addPenghuni: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PenghuniBaruRequest"];
+            };
+        };
+        responses: {
+            /** @description Terdaftar */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PenghuniTerdaftar"];
+                };
+            };
+            403: components["responses"]["Error"];
+            404: components["responses"]["Error"];
+            409: components["responses"]["Error"];
+            422: components["responses"]["Error"];
+        };
+    };
+    ubahPenghuni: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id_pengguna: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UbahPenghuniRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PenghuniTerdaftar"];
+                };
+            };
+            403: components["responses"]["Error"];
+            404: components["responses"]["Error"];
+            409: components["responses"]["Error"];
+            422: components["responses"]["Error"];
+        };
+    };
     getStatusSewa: {
         parameters: {
             query?: never;
@@ -2010,6 +2266,25 @@ export interface operations {
                     "application/json": components["schemas"]["Notifikasi"][];
                 };
             };
+        };
+    };
+    resetDataDemo: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Data demo sudah dikembalikan ke kondisi awal */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            404: components["responses"]["Error"];
         };
     };
 }

@@ -3,7 +3,15 @@
  * Peran file ini sama dengan router.py di FastAPI: parsing request -> panggil service -> response.
  */
 import { http, HttpResponse } from "msw";
-import type { ErrorResponse, LogRequest, MetodePembayaran, UbahStatusRequest } from "@/lib/api/types";
+import type {
+  ErrorResponse,
+  LogRequest,
+  MetodePembayaran,
+  PenghuniBaruRequest,
+  UbahPenghuniRequest,
+  UbahStatusRequest,
+} from "@/lib/api/types";
+import { resetDb } from "./db";
 import {
   aiClassification,
   auth,
@@ -54,6 +62,18 @@ export const handlers = [
     handle(async ({ request }) => {
       const body = (await request.json()) as { id_pengguna: number };
       return HttpResponse.json(auth.login(body.id_pengguna));
+    }),
+  ),
+
+  /* ----- Auth ----- */
+  http.get(`${BASE}/auth/me`, handle(({ request }) => HttpResponse.json(auth.me(user(request))))),
+
+  /* ----- Dev (demo) ----- */
+  http.post(
+    `${BASE}/dev/reset`,
+    handle(() => {
+      resetDb();
+      return new HttpResponse(null, { status: 204 });
     }),
   ),
 
@@ -250,6 +270,28 @@ export const handlers = [
       const u = user(request);
       auth.requireRole(u, "penghuni");
       return HttpResponse.json(tenantLease.profil(u.id));
+    }),
+  ),
+
+  http.get(`${BASE}/pemilik/unit`, handle(({ request }) => HttpResponse.json(tenantLease.listUnitPemilik(user(request))))),
+
+  http.get(`${BASE}/pemilik/penghuni`, handle(({ request }) => HttpResponse.json(tenantLease.listPenghuni(user(request))))),
+
+  http.post(
+    `${BASE}/pemilik/penghuni`,
+    handle(async ({ request }) => {
+      const u = user(request);
+      const body = (await request.json()) as PenghuniBaruRequest;
+      return HttpResponse.json(tenantLease.addPenghuni(u, body), { status: 201 });
+    }),
+  ),
+
+  http.patch(
+    `${BASE}/pemilik/penghuni/:id_pengguna`,
+    handle(async ({ request, params }) => {
+      const u = user(request);
+      const body = (await request.json()) as UbahPenghuniRequest;
+      return HttpResponse.json(tenantLease.ubahPenghuni(u, idParam(params.id_pengguna), body));
     }),
   ),
 
