@@ -1,6 +1,6 @@
 "use client";
 
-import { ChartNoAxesColumnIncreasing, CirclePlus, HardHat, Ticket, Wallet } from "@/components/icons";
+import { ChartNoAxesColumnIncreasing, CirclePlus, HardHat, Ticket, UserRound, Wallet } from "@/components/icons";
 import type { ReactNode } from "react";
 import { OutboxButton } from "@/components/notifikasi/OutboxButton";
 import { AppHeader, type NavItem } from "./AppHeader";
@@ -20,6 +20,7 @@ const NAV_PEMILIK: NavItem[] = [
     icon: ChartNoAxesColumnIncreasing,
     match: (p) => p.startsWith("/pemilik/keuangan") || p.startsWith("/pemilik/tagihan"),
   },
+  { href: "/pemilik/penghuni", label: "Penghuni", icon: UserRound, match: (p) => p.startsWith("/pemilik/penghuni") },
 ];
 
 const NAV_TEKNISI: NavItem[] = [{ href: "/teknisi", label: "Pekerjaan", icon: HardHat, match: (p) => p.startsWith("/teknisi") }];

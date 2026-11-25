@@ -4,11 +4,14 @@ import { useSyncExternalStore } from "react";
 import type { Pengguna } from "./api/types";
 
 /**
- * Sesi demo: token + data pengguna, disimpan di localStorage.
+ * Sesi: token + data pengguna, disimpan di localStorage.
  * Store kecil berbasis subscribe/getSnapshot agar bisa dibaca oleh komponen React
  * (lewat useSession) maupun oleh API client (lewat getToken) tanpa prop drilling.
+ *
+ * sumber "google": token diambil ulang dari supabase-js setiap request (diperbarui otomatis),
+ * token di sini hanya salinan saat login. sumber "demo" (default): token demo dari backend/mock.
  */
-export type Session = { token: string; pengguna: Pengguna };
+export type Session = { token: string; pengguna: Pengguna; sumber?: "demo" | "google" };
 
 const KEY = "kosmos.session";
 const listeners = new Set<() => void>();

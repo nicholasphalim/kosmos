@@ -3,13 +3,25 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useRouter } from "next/navigation";
 import { sessionStore } from "@/lib/session";
+import { keluarGoogle } from "@/lib/supabase";
 import { api, unwrap } from "./client";
-import type { LogRequest, MetodePembayaran, TiketDetail, UbahStatusRequest, WorkOrder } from "./types";
+import type {
+  LogRequest,
+  MetodePembayaran,
+  PenghuniBaruRequest,
+  SewaBaruRequest,
+  TiketDetail,
+  UbahPenghuniRequest,
+  UbahStatusRequest,
+  WorkOrder,
+} from "./types";
 
 /** Semua query key di satu tempat supaya invalidasi konsisten. */
 export const qk = {
   akunDemo: ["auth", "akun-demo"] as const,
   profil: ["penghuni", "me"] as const,
+  unitPemilik: ["pemilik", "unit"] as const,
+  penghuniList: ["pemilik", "penghuni"] as const,
   tiketList: ["tiket"] as const,
   tiket: (id: number) => ["tiket", id] as const,
   notifikasi: ["notifikasi"] as const,
@@ -40,7 +52,7 @@ export function useDemoLogin() {
       unwrap(await api.POST("/auth/demo-login", { body: { id_pengguna: idPengguna } })),
     onSuccess: (res) => {
       queryClient.clear();
-      sessionStore.set({ token: res.token, pengguna: res.pengguna });
+      sessionStore.set({ token: res.token, pengguna: res.pengguna, sumber: "demo" });
     },
   });
 }
@@ -48,7 +60,8 @@ export function useDemoLogin() {
 export function useLogout() {
   const queryClient = useQueryClient();
   const router = useRouter();
-  return () => {
+  return async () => {
+    if (sessionStore.get()?.sumber === "google") await keluarGoogle();
     sessionStore.clear();
     queryClient.clear();
     router.replace("/login");
@@ -61,6 +74,57 @@ export function useProfilPenghuni() {
   return useQuery({
     queryKey: qk.profil,
     queryFn: async () => unwrap(await api.GET("/penghuni/me")),
+  });
+}
+
+/* Pendaftaran penghuni oleh pemilik (pengganti sign up, plan §11b #9) */
+
+export function useUnitPemilik() {
+  return useQuery({
+    queryKey: qk.unitPemilik,
+    queryFn: async () => unwrap(await api.GET("/pemilik/unit")),
+  });
+}
+
+export function usePenghuniList() {
+  return useQuery({
+    queryKey: qk.penghuniList,
+    queryFn: async () => unwrap(await api.GET("/pemilik/penghuni")),
+  });
+}
+
+/** Setelah data penghuni/sewa berubah: segarkan daftar penghuni, unit, dan tagihan sewa. */
+function useSegarkanPenghuni() {
+  const queryClient = useQueryClient();
+  return () => {
+    queryClient.invalidateQueries({ queryKey: ["pemilik"] });
+    queryClient.invalidateQueries({ queryKey: qk.sewaList });
+  };
+}
+
+export function useTambahPenghuni() {
+  const segarkan = useSegarkanPenghuni();
+  return useMutation({
+    mutationFn: async (body: PenghuniBaruRequest) => unwrap(await api.POST("/pemilik/penghuni", { body })),
+    onSuccess: segarkan,
+  });
+}
+
+export function useUbahPenghuni() {
+  const segarkan = useSegarkanPenghuni();
+  return useMutation({
+    mutationFn: async ({ idPengguna, body }: { idPengguna: number; body: UbahPenghuniRequest }) =>
+      unwrap(await api.PATCH("/pemilik/penghuni/{id_pengguna}", { params: { path: { id_pengguna: idPengguna } }, body })),
+    onSuccess: segarkan,
+  });
+}
+
+export function useSewaLagi() {
+  const segarkan = useSegarkanPenghuni();
+  return useMutation({
+    mutationFn: async ({ idPengguna, body }: { idPengguna: number; body: SewaBaruRequest }) =>
+      unwrap(await api.POST("/pemilik/penghuni/{id_pengguna}/sewa", { params: { path: { id_pengguna: idPengguna } }, body })),
+    onSuccess: segarkan,
   });
 }
 
