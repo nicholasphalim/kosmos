@@ -11,4 +11,7 @@ if (config.apiMode === "mock") {
   window.__kosmosMockReady = terapkanSinyalReset()
     .then(() => import("@/mocks/browser"))
     .then(({ startMockApi }) => startMockApi());
+} else {
+  // Mode live: sinyal `npm run demo:reset` cukup menghapus sesi lokal (database di-reset oleh backend).
+  void terapkanSinyalReset();
 }

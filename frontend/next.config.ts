@@ -1,7 +1,8 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  /* config options here */
+  // Build E2E mode live memakai folder terpisah agar tidak menimpa build mode mock.
+  distDir: process.env.NEXT_DIST_DIR ?? ".next",
   cacheComponents: true,
   partialPrefetching: true,
   reactCompiler: true,
