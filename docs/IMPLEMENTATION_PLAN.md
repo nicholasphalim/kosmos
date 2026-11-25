@@ -590,7 +590,7 @@ Setiap fase dikerjakan di branch `backend-v2` dan masuk ke `main` lewat satu pul
 |---|---|---|---|
 | **P0 Desain** | Dokumen ini, endpoint auth dan pendaftaran penghuni di `openapi.yaml`, mock MSW untuk endpoint baru | Kontrak dan skema disetujui | 25–26 Nov |
 | **P1 Infrastruktur** | Project Supabase (dev + demo), OAuth Google, Railway (`/health`), Vercel, GitHub Actions (ruff, pytest, typecheck, lint, build) | `/health` live di internet dan CI hijau | 26–27 Nov |
-| **P2 Fondasi** | `core/`, Alembic + migrasi awal (dengan RLS), seed, `/dev/reset`, test harness, test layering, test kontrak | `alembic upgrade head` + seed jalan di `kosmos-dev` dan `kosmos-demo` | 27–28 Nov |
+| **P2 Fondasi** | `core/`, Alembic + migrasi 0001 (Tenant and Lease + Technician, dengan RLS), seed, `/dev/reset`, test harness, test layering, test kontrak. Tabel proses lain ditambahkan lewat migrasi baru di fase yang memakainya (P4–P6) | `alembic upgrade head` + seed jalan di `kosmos-dev` dan `kosmos-demo` (pre-deploy Railway) | 27–28 Nov |
 | **P3 Auth** | Verifikasi JWKS, demo login, `/auth/me`, guard role, pendaftaran penghuni. Frontend: tombol Google, `/auth/callback`, pesan email belum terdaftar, halaman `/pemilik/penghuni` | Login Google sampai dashboard sesuai role berhasil di URL publik | 29 Nov–1 Des |
 | **P4 Complaint Handling** | HMR keluhan, status, klasifikasi ulang, buka ulang. Tenant and Lease, Complaint Ticket. Media Storage (Supabase), AI Classification, Notification | E2E live skenario 1–4 | 2–4 Des |
 | **P5 Repair Verification** | Estimasi, persetujuan, jadwal, biaya tambahan, log, bukti, konfirmasi, terima. Technician, Work Order, empat Micro | E2E live skenario 5, 5b, 5c, 6, 8, 8b | 5–7 Des |

@@ -39,6 +39,11 @@ app.add_middleware(
 )
 pasang_error_handler(app)
 
+if settings.demo_mode:
+    from app.dev.router import router as dev_router
+
+    app.include_router(dev_router, prefix=API_PREFIX)
+
 
 @app.get("/health", tags=["Ops"], summary="Liveness: server hidup (tanpa cek database)")
 def health() -> dict:

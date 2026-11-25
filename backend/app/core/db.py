@@ -3,7 +3,9 @@
 from collections.abc import Iterator
 from datetime import datetime
 from functools import lru_cache
+from typing import Annotated
 
+from fastapi import Depends
 from sqlalchemy import DateTime, Engine, create_engine, text
 from sqlalchemy.orm import DeclarativeBase, Session, sessionmaker
 from sqlalchemy.types import TypeDecorator
@@ -52,6 +54,10 @@ def get_db() -> Iterator[Session]:
         yield db
     finally:
         db.close()
+
+
+DB = Annotated[Session, Depends(get_db)]
+"""Tipe parameter router: `def endpoint(db: DB)`."""
 
 
 def cek_koneksi() -> None:
