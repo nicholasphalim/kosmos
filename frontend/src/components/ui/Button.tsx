@@ -3,7 +3,7 @@ import { LoaderCircle } from "@/components/icons";
 import Link from "next/link";
 import type { ComponentProps, ReactNode } from "react";
 
-type Variant = "primary" | "outline" | "light" | "ghost";
+type Variant = "primary" | "bahaya" | "outline" | "light" | "ghost";
 type Size = "sm" | "md" | "lg";
 
 const base =
@@ -11,6 +11,7 @@ const base =
 
 const variants: Record<Variant, string> = {
   primary: "btn-primary hover:-translate-y-px",
+  bahaya: "btn-bahaya hover:-translate-y-px",
   outline: "border border-line-strong bg-white text-navy hover:border-violet-400 hover:bg-lilac-50",
   light: "bg-white text-navy shadow-lift hover:-translate-y-px hover:bg-lilac-50",
   ghost: "text-violet underline underline-offset-2 hover:text-navy",
