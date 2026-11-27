@@ -16,10 +16,12 @@ export default defineConfig({
     screenshot: "only-on-failure",
   },
   projects: [{ name: "chromium", use: { ...devices["Desktop Chrome"] } }],
+  // Selalu build ulang dalam mode mock ke folder terpisah, supaya tes tidak pernah memakai build lama.
   webServer: {
-    command: "npm run start -- --port 3100",
+    command: "npm run build && npm run start -- --port 3100",
     url: "http://localhost:3100/login",
-    reuseExistingServer: true,
-    timeout: 120_000,
+    reuseExistingServer: false,
+    timeout: 300_000,
+    env: { NEXT_PUBLIC_API_MODE: "mock", NEXT_DIST_DIR: ".next-mock" },
   },
 });

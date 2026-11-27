@@ -209,10 +209,14 @@ export const tenantLease = {
     return sewa.id_unit;
   },
 
-  /** Get Status Sewa: dihitung dari tanggal, tidak disimpan (plan §4). */
-  getStatusSewa(idUnit: number): StatusSewa {
+  /**
+   * Get Status Sewa: dihitung dari tanggal, tidak disimpan (plan §4).
+   * Dengan idPenghuni: sewa terbaru penghuni itu di unit tersebut, supaya sewa penghuni baru di unit yang sama
+   * tidak membuat sewa penghuni lama ikut dianggap aktif. Tanpa idPenghuni: sewa terbaru unit.
+   */
+  getStatusSewa(idUnit: number, idPenghuni?: number): StatusSewa {
     const sewa = db()
-      .sewa.filter((s) => s.id_unit === idUnit)
+      .sewa.filter((s) => s.id_unit === idUnit && (idPenghuni === undefined || s.id_penghuni === idPenghuni))
       .sort((a, b) => b.tanggal_mulai.localeCompare(a.tanggal_mulai))[0];
     if (!sewa) throw new ServiceError(404, "SEWA_TIDAK_ADA", "Unit belum pernah disewa.");
     const hariIni = new Date().toISOString().slice(0, 10);
@@ -235,7 +239,7 @@ export const tenantLease = {
     const p = db().pengguna.find((x) => x.id === idPenghuni)!;
     const idUnit = tenantLease.getIdUnit(idPenghuni);
     const { id_pemilik: _, ...unit } = tenantLease.unitRingkas(idUnit);
-    return { pengguna: toPengguna(p), unit, sewa: tenantLease.getStatusSewa(idUnit) };
+    return { pengguna: toPengguna(p), unit, sewa: tenantLease.getStatusSewa(idUnit, idPenghuni) };
   },
 
   pengguna(id: number): PenggunaRow {
@@ -410,12 +414,11 @@ export const tenantLease = {
   /** GET /unit/{id}/sewa: hanya pemilik unit atau penghuni yang pernah menyewa unit itu. */
   statusSewaUntuk(user: PenggunaRow, idUnit: number): StatusSewa {
     const unit = db().unit.find((u) => u.id === idUnit);
-    const boleh =
-      unit !== undefined &&
-      (tenantLease.unitRingkas(idUnit).id_pemilik === user.id ||
-        db().sewa.some((s) => s.id_unit === idUnit && s.id_penghuni === user.id));
-    if (!boleh) throw new ServiceError(404, "UNIT_TIDAK_ADA", "Unit tidak ditemukan.");
-    return tenantLease.getStatusSewa(idUnit);
+    const pemilik = unit !== undefined && tenantLease.unitRingkas(idUnit).id_pemilik === user.id;
+    const penyewa = db().sewa.some((s) => s.id_unit === idUnit && s.id_penghuni === user.id);
+    if (!pemilik && !penyewa) throw new ServiceError(404, "UNIT_TIDAK_ADA", "Unit tidak ditemukan.");
+    // Penghuni (termasuk penghuni lama) hanya melihat sewanya sendiri, bukan sewa penghuni berikutnya.
+    return tenantLease.getStatusSewa(idUnit, pemilik ? undefined : user.id);
   },
 };
 
@@ -737,7 +740,7 @@ export const hmr = {
       tenantLease.getIdUnit(user.id),
     );
     const sewa = await tr.run("Tenant and Lease", "Entity", (s: StatusSewa) => `getStatusSewa(unit=${idUnit}) → ${s.status_sewa}`, jitter(3, 6), () =>
-      tenantLease.getStatusSewa(idUnit),
+      tenantLease.getStatusSewa(idUnit, user.id),
     );
 
     // Cabang BPMN: sewa tidak aktif -> keluhan ditolak, tidak ada tiket.

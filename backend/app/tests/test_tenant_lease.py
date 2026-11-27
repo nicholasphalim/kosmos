@@ -159,3 +159,20 @@ def test_nama_dan_nomor_wa_dinormalisasi(api):
     assert res.status_code == 201, res.text
     assert res.json()["pengguna"]["nama"] == "Indanna Halwah Raqiqah M."
     assert res.json()["no_wa"] == "0812-3456-7890"
+
+
+def test_sewa_penghuni_baru_tidak_mengaktifkan_penghuni_lama(api):
+    """Regresi: status sewa Qiqa dihitung dari sewanya sendiri, bukan sewa terbaru unit A-102."""
+    pemilik = login_demo(api, 4)
+    baru = _baru(tanggal_mulai=tanggal_geser(0).isoformat())
+    assert api.post(f"{V}/pemilik/penghuni", headers=pemilik, json=baru).status_code == 201
+
+    qiqa = login_demo(api, 2)
+    assert api.get(f"{V}/penghuni/me", headers=qiqa).json()["sewa"]["status_sewa"] == "tidak_aktif"
+    sewa_qiqa = api.get(f"{V}/unit/8/sewa", headers=qiqa).json()
+    assert sewa_qiqa["status_sewa"] == "tidak_aktif" and sewa_qiqa["tanggal_selesai"] == tanggal_geser(-13).isoformat()
+    assert api.get(f"{V}/unit/8/sewa", headers=pemilik).json()["status_sewa"] == "aktif"
+    akun = {a["pengguna"]["nama"]: a["label_sewa"] for a in api.get(f"{V}/auth/demo-accounts").json()}
+    assert akun["Qiqa"] == "berakhir"
+    res = api.post(f"{V}/hmr/keluhan", headers=qiqa, data={"deskripsi": "Lampu kamar mandi mati sejak pagi"})
+    assert res.json()["hasil"] == "ditolak"
