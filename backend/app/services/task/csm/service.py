@@ -1,9 +1,12 @@
 """[Task: Complete and Settle Maintenance] orkestrator pengerjaan sampai hasil diterima pemilik.
 
 Log servis, biaya tambahan, bukti + Evidence Verification, konfirmasi penghuni, penerimaan pemilik
-(Get Biaya Final, Calculate Komisi, Add Invoice). Pembayaran invoice ditambahkan di fase P6.
+(Get Biaya Final, Calculate Komisi, Add Invoice), lalu pembayaran invoice oleh pemilik (satu per satu atau
+sekaligus) lewat Payment Gateway, rekonsiliasi, dan pencatatan ke laporan kas.
 Urutan langkah dan teks `operasi` di trace mengikuti objek `csm` di frontend/src/mocks/services.ts.
 """
+
+from datetime import datetime
 
 from sqlalchemy.orm import Session
 
@@ -11,8 +14,13 @@ from app import views
 from app.core.errors import ServiceError
 from app.core.format import rupiah
 from app.core.trace import Tracer
+from app.core.waktu import now_utc
 from app.services.entity.complaint_ticket import service as complaint_ticket
+from app.services.entity.financial_ledger import service as ledger
 from app.services.entity.invoice import service as invoice
+from app.services.entity.invoice.models import Invoice
+from app.services.entity.payment import service as payment
+from app.services.entity.tenant_lease import service as tenant_lease
 from app.services.entity.tenant_lease.models import Pengguna
 from app.services.entity.work_order import service as work_order
 from app.services.micro import commission_calculation, evidence_verification
@@ -21,7 +29,9 @@ from app.services.task.hmr.models import Estimasi
 from app.services.task.kabar import kabari_perbaikan, kabari_tagihan
 from app.services.utility.media_storage import service as media_storage
 from app.services.utility.media_storage.service import FileMasuk
-from app.views.schemas import BuktiResponse, KonfirmasiResponse
+from app.services.utility.payment_gateway import service as payment_gateway
+from app.services.utility.payment_gateway.service import LABEL_METODE
+from app.views.schemas import BayarResponse, BayarSekaligusResponse, BuktiResponse, KonfirmasiResponse
 from app.views.schemas import WorkOrder as WorkOrderOut
 
 
@@ -230,5 +240,167 @@ def terima(db: Session, user: Pengguna, id_wo: int, diterima: bool, catatan: str
         work_order=views.work_order(db, wo),
         tiket=views.tiket_detail(db, t),
         invoice=views.invoice(db, inv),
+        trace=tr.as_list(),  # type: ignore[arg-type]
+    )
+
+
+# ---------- Billing: pemilik membayar invoice ----------
+
+
+def _catat_kas_perbaikan(db: Session, inv: Invoice, waktu: datetime) -> None:
+    """Dua baris pengeluaran per invoice di laporan kas pemilik: bagian teknisi dan komisi Kosmos."""
+    wo = work_order.get(db, inv.id_work_order)
+    k = complaint_ticket.get_keluhan(db, complaint_ticket.get_tiket(db, wo.id_tiket).id_keluhan)
+    unit = tenant_lease.info_unit(db, k.id_unit)
+    teknisi = tenant_lease.get_pengguna(db, wo.id_teknisi).nama
+    kode = invoice.kode_invoice(inv.id)
+    ledger.add(
+        db,
+        unit.id_pemilik,
+        waktu,
+        "pembayaran_teknisi",
+        f"Biaya perbaikan {unit.nomor_unit}, ke {teknisi}",
+        -(inv.total - inv.komisi),
+        kode,
+        unit.nama_properti,
+    )
+    ledger.add(
+        db,
+        unit.id_pemilik,
+        waktu,
+        "komisi",
+        f"Komisi Kosmos {inv.persen_komisi}% perbaikan {unit.nomor_unit}",
+        -inv.komisi,
+        kode,
+        unit.nama_properti,
+    )
+
+
+def bayar(db: Session, user: Pengguna, id_invoice: int, metode: str, simulasi_gagal: bool) -> BayarResponse:
+    """Pemilik membayar satu invoice: metode -> gateway -> status -> rekonsiliasi -> lunas -> laporan kas."""
+    payment_gateway.validasi_metode(metode)
+    tr = Tracer()
+    with tr.step(
+        "Complete and Settle Maintenance", "Task", f"bayarInvoice({invoice.kode_invoice(id_invoice)}, {metode})"
+    ):
+        pass
+    with tr.step("Invoice", "Entity", "getInvoice") as s:
+        inv = views.invoice_untuk(db, user, id_invoice)
+        s.operasi = f"getInvoice → {inv.status}, {rupiah(inv.total)}"
+    if inv.status == "lunas":
+        raise ServiceError(409, "SUDAH_LUNAS", "Invoice ini sudah lunas.")
+
+    with tr.step("Payment", "Entity", f"setMetodePembayaran({LABEL_METODE[metode]})"):
+        p = payment.set_metode(db, "invoice", inv.id, metode, inv.total, payment_gateway.ref_baru())
+    with tr.step("Payment Gateway", "Utility", "processPayment via payment gateway (mock)") as s:
+        hasil = payment_gateway.proses(p.ref_gateway, metode, inv.total, simulasi_gagal)
+        s.operasi += f" → {hasil.status}"
+    with tr.step("Payment Gateway", "Utility", f"getStatusPembayaran → {hasil.status_gateway}"):
+        pass
+    with tr.step("Payment", "Entity", f"setStatusPembayaran({hasil.status})"):
+        payment.set_status(db, p, hasil.status, hasil.alasan)
+
+    if hasil.status == "gagal":
+        with tr.step("Notification", "Utility", "setNotifikasi(bayar_gagal)") as s:
+            n = kabari_tagihan(db, inv, "bayar_gagal", hasil.alasan)
+            s.operasi = f"setNotifikasi(bayar_gagal) × {n} (WA mock)"
+        db.commit()
+        return BayarResponse(
+            hasil="gagal",
+            invoice=views.invoice(db, inv),
+            pembayaran=views.pembayaran(p),
+            alasan=hasil.alasan,
+            trace=tr.as_list(),  # type: ignore[arg-type]
+        )
+
+    with tr.step("Payment", "Entity", "reconcilePembayaran → cocok"):
+        if not payment.reconcile(db, p, hasil.jumlah_tercatat, inv.total):
+            raise ServiceError(409, "REKONSILIASI_GAGAL", "Jumlah transaksi tidak cocok dengan tagihan.")
+    waktu = now_utc()
+    with tr.step("Invoice", "Entity", "setStatus(lunas)"):
+        invoice.set_lunas(db, inv.id, waktu)
+    with tr.step("Financial Ledger", "Entity", "addTransaksiKas × 2 (bagian teknisi, komisi)"):
+        _catat_kas_perbaikan(db, inv, waktu)
+    with tr.step("Notification", "Utility", "setNotifikasi(lunas)") as s:
+        s.operasi = f"setNotifikasi(lunas) × {kabari_tagihan(db, inv, 'lunas')} (WA mock)"
+    db.commit()
+    return BayarResponse(
+        hasil="berhasil",
+        invoice=views.invoice(db, inv),
+        pembayaran=views.pembayaran(p),
+        alasan=None,
+        trace=tr.as_list(),  # type: ignore[arg-type]
+    )
+
+
+MAKS_BAYAR_SEKALIGUS = 20
+
+
+def bayar_sekaligus(
+    db: Session, user: Pengguna, ids: list[int], metode: str, simulasi_gagal: bool
+) -> BayarSekaligusResponse:
+    """Beberapa invoice dalam satu transaksi gateway (satu ref, satu baris Payment per invoice).
+
+    All-or-nothing: gagal di gateway berarti tidak ada invoice yang lunas.
+    """
+    payment_gateway.validasi_metode(metode)
+    unik = list(dict.fromkeys(ids))
+    if not 1 <= len(unik) <= MAKS_BAYAR_SEKALIGUS:
+        raise ServiceError(422, "JUMLAH_INVOICE_TIDAK_VALID", f"Pilih 1 sampai {MAKS_BAYAR_SEKALIGUS} invoice.")
+    tr = Tracer()
+    with tr.step("Complete and Settle Maintenance", "Task", f"bayarInvoiceSekaligus({len(unik)} invoice, {metode})"):
+        pass
+    with tr.step("Invoice", "Entity", "getInvoice") as s:
+        daftar = [views.invoice_untuk(db, user, i) for i in unik]
+        total = sum(i.total for i in daftar)
+        s.operasi = f"getInvoice × {len(daftar)} → {rupiah(total)}"
+    lunas = next((i for i in daftar if i.status == "lunas"), None)
+    if lunas:
+        raise ServiceError(409, "SUDAH_LUNAS", f"{invoice.kode_invoice(lunas.id)} sudah lunas.")
+
+    ref = payment_gateway.ref_baru()
+    with tr.step("Payment", "Entity", f"setMetodePembayaran({LABEL_METODE[metode]}) × {len(daftar)}, ref {ref}"):
+        rows = [payment.set_metode(db, "invoice", i.id, metode, i.total, ref) for i in daftar]
+    with tr.step("Payment Gateway", "Utility", f"processPayment {rupiah(total)} via payment gateway (mock)") as s:
+        hasil = payment_gateway.proses(ref, metode, total, simulasi_gagal)
+        s.operasi += f" → {hasil.status}"
+    with tr.step("Payment", "Entity", f"setStatusPembayaran({hasil.status}) × {len(rows)}"):
+        for r in rows:
+            payment.set_status(db, r, hasil.status, hasil.alasan)
+
+    if hasil.status == "gagal":
+        db.commit()
+        return BayarSekaligusResponse(
+            hasil="gagal",
+            invoice=[views.invoice(db, i) for i in daftar],
+            ref_gateway=ref,
+            total=total,
+            alasan=hasil.alasan,
+            trace=tr.as_list(),  # type: ignore[arg-type]
+        )
+
+    with tr.step("Payment", "Entity", "reconcilePembayaran × n → cocok"):
+        # Satu transaksi gateway: jumlahnya dicocokkan ke total, lalu tiap baris Payment ke invoicenya.
+        cocok = hasil.jumlah_tercatat == total and all(
+            payment.reconcile(db, r, i.total, i.total) for r, i in zip(rows, daftar, strict=True)
+        )
+        if not cocok:
+            raise ServiceError(409, "REKONSILIASI_GAGAL", "Jumlah transaksi tidak cocok dengan tagihan.")
+    waktu = now_utc()
+    with tr.step("Invoice", "Entity", f"setStatus(lunas) × {len(daftar)}"):
+        for i in daftar:
+            invoice.set_lunas(db, i.id, waktu)
+    with tr.step("Financial Ledger", "Entity", f"addTransaksiKas × {len(daftar) * 2}"):
+        for i in daftar:
+            _catat_kas_perbaikan(db, i, waktu)
+    with tr.step("Notification", "Utility", "setNotifikasi(lunas)") as s:
+        s.operasi = f"setNotifikasi(lunas) × {sum(kabari_tagihan(db, i, 'lunas') for i in daftar)} (WA mock)"
+    db.commit()
+    return BayarSekaligusResponse(
+        hasil="berhasil",
+        invoice=[views.invoice(db, i) for i in daftar],
+        ref_gateway=ref,
+        total=total,
+        alasan=None,
         trace=tr.as_list(),  # type: ignore[arg-type]
     )

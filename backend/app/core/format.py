@@ -26,3 +26,25 @@ def jadwal(dt: datetime) -> str:
     """Rab, 25 Nov, 10.00 (WIB)."""
     d = dt.astimezone(WIB)
     return f"{HARI[d.weekday()]}, {d.day} {BULAN[d.month - 1]}, {d:%H.%M}"
+
+
+BULAN_PANJANG = [
+    "Januari",
+    "Februari",
+    "Maret",
+    "April",
+    "Mei",
+    "Juni",
+    "Juli",
+    "Agustus",
+    "September",
+    "Oktober",
+    "November",
+    "Desember",
+]
+
+
+def label_periode(periode: str) -> str:
+    """'2026-11' -> 'November 2026'."""
+    tahun, bulan = periode.split("-")
+    return f"{BULAN_PANJANG[int(bulan) - 1]} {tahun}"

@@ -1,6 +1,6 @@
 """[Entity: Invoice] tagihan ke pemilik. Aturan sama dengan `invoice` di frontend/src/mocks/services.ts.
 
-Pembayaran (Entity Payment) dan pencatatan kas ditambahkan di fase P6.
+Riwayat pembayaran disimpan Entity Payment; pencatatan kas oleh Entity Financial Ledger.
 """
 
 from datetime import date, datetime, timedelta

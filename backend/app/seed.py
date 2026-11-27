@@ -6,19 +6,23 @@ kosmos.test yang tidak bisa menerima email, jadi persona seed hanya bisa masuk l
     uv run python -m app.seed          isi data bila database masih kosong
     POST /api/v1/dev/reset             kosongkan semua tabel lalu isi ulang (hanya DEMO_MODE)
 
-Pembayaran, laporan kas, dan tagihan sewa (Billing dan Rent Billing) ditambahkan di fase P6.
+Termasuk jejak Billing (pembayaran invoice, laporan kas) dan Rent Billing (tagihan sewa tiga bulan terakhir).
 """
 
 from dataclasses import dataclass
-from datetime import datetime, timedelta
+from datetime import date, datetime, timedelta
 
 from sqlalchemy import func, select, text
 from sqlalchemy.orm import Session
 
+from app.core.format import label_periode
 from app.core.models import metadata
 from app.core.waktu import WIB, menit_lalu, now_utc, tanggal_geser
 from app.services.entity.complaint_ticket.models import Keluhan, Tiket, TiketRiwayat
+from app.services.entity.financial_ledger.models import TransaksiKas
 from app.services.entity.invoice.models import Invoice
+from app.services.entity.payment.models import Pembayaran
+from app.services.entity.rent_invoice.models import TagihanSewa
 from app.services.entity.technician.models import Teknisi
 from app.services.entity.tenant_lease.models import Pengguna, Properti, Sewa, Unit
 from app.services.entity.work_order.models import LogServis, WorkOrder
@@ -29,6 +33,8 @@ from app.services.micro.technician_matching import Titik, jarak_km
 from app.services.task.hmr.models import Estimasi
 from app.services.utility.media_storage.models import Lampiran
 from app.services.utility.notification.models import Notifikasi
+from app.services.utility.payment_gateway.adapters.mock import ALASAN_GAGAL
+from app.services.utility.payment_gateway.service import ref_baru
 
 PENGGUNA = [
     (1, "Dea", "penghuni", "0812-xxxx-0101", "dea@kosmos.test"),
@@ -80,7 +86,7 @@ TEKNISI = [
 
 @dataclass(frozen=True)
 class Bayar:
-    """Pembayaran invoice oleh pemilik. Baris Payment dan laporan kas diisi di fase P6."""
+    """Pembayaran invoice oleh pemilik: baris Payment (plus percobaan gagal) dan dua baris laporan kas."""
 
     menit: int
     metode: str
@@ -314,11 +320,12 @@ ID_WO_AWAL = 9
 
 
 def _isi_perbaikan(db: Session, now: datetime) -> None:
-    """Repair Verification tiket awal: estimasi disetujui -> work order -> log servis -> bukti -> invoice."""
+    """Repair Verification tiket awal: estimasi disetujui -> work order -> log servis -> bukti -> invoice -> bayar."""
     nama = {p[0]: p[1] for p in PENGGUNA}
     pemilik = nama[4]
     lokasi_unit = {u[0]: next(Titik(p[3], p[4]) for p in PROPERTI if p[0] == u[1]) for u in UNIT}
     nomor_unit = {u[0]: u[2] for u in UNIT}
+    properti_unit = {u[0]: next(p for p in PROPERTI if p[0] == u[1]) for u in UNIT}
     lokasi_teknisi = {t[0]: Titik(t[6], t[7]) for t in TEKNISI}
     id_est = id_wo = id_inv = id_lampiran = 0
     for a in TIKET_AWAL:
@@ -432,6 +439,126 @@ def _isi_perbaikan(db: Session, now: datetime) -> None:
                 created_at=terbit,
             )
         )
+        if not r.bayar:
+            continue
+        dibayar = menit_lalu(r.bayar.menit, now)
+        if r.bayar.gagal_dulu:
+            db.add(
+                Pembayaran(
+                    untuk="invoice",
+                    id_tagihan=id_inv,
+                    ref_gateway=ref_baru(),
+                    metode=r.bayar.gagal_dulu,
+                    jumlah=total,
+                    status="gagal",
+                    alasan_gagal=ALASAN_GAGAL[r.bayar.gagal_dulu],
+                    direkonsiliasi=False,
+                    created_at=menit_lalu(r.bayar.menit + 15, now),
+                )
+            )
+        db.add(
+            Pembayaran(
+                untuk="invoice",
+                id_tagihan=id_inv,
+                ref_gateway=ref_baru(),
+                metode=r.bayar.metode,
+                jumlah=total,
+                status="berhasil",
+                alasan_gagal=None,
+                direkonsiliasi=True,
+                created_at=dibayar,
+            )
+        )
+        prop = properti_unit[a.unit]
+        u = nomor_unit[a.unit]
+        kas = [
+            ("pembayaran_teknisi", f"Biaya perbaikan {u}, ke {nama[r.teknisi]}", -(total - komisi)),
+            ("komisi", f"Komisi Kosmos {persen}% perbaikan {u}", -komisi),
+        ]
+        db.add_all(
+            TransaksiKas(
+                id_pemilik=prop[2],
+                waktu=dibayar,
+                jenis=j,
+                keterangan=k,
+                jumlah=n,
+                ref=f"INV-{id_inv:04d}",
+                properti=prop[1],
+            )
+            for j, k, n in kas
+        )
+    db.flush()
+
+
+# Tagihan sewa yang belum dibayar, per bulan relatif (0 = bulan ini): id penghuni Dea, Fredo, Halim.
+# Halim juga belum membayar bulan lalu, jadi tampil terlambat.
+SEWA_BELUM_BAYAR = {0: (1, 3, 5), -1: (5,)}
+# Putra (sewa 6, baru) sengaja belum ditagih bulan ini supaya "Terbitkan tagihan" bisa didemokan.
+SEWA_BELUM_DITAGIH = 6
+
+
+def _geser_bulan(tahun: int, bulan: int, n: int) -> tuple[int, int]:
+    k = tahun * 12 + bulan - 1 + n
+    return k // 12, k % 12 + 1
+
+
+def _isi_tagihan_sewa(db: Session, now: datetime) -> None:
+    """Rent Billing: tagihan sewa dua bulan lalu, bulan lalu (sebagian besar lunas), dan bulan berjalan (WIB)."""
+    nama = {p[0]: p[1] for p in PENGGUNA}
+    unit = {u[0]: u for u in UNIT}
+    properti = {p[0]: p for p in PROPERTI}
+    hari_ini = now.astimezone(WIB).date()
+    for offset in (-2, -1, 0):
+        th, bl = _geser_bulan(hari_ini.year, hari_ini.month, offset)
+        th_depan, bl_depan = _geser_bulan(th, bl, 1)
+        awal, akhir = date(th, bl, 1), date(th_depan, bl_depan, 1) - timedelta(days=1)
+        periode = f"{th}-{bl:02d}"
+        terbit = datetime(th, bl, 1, 8, tzinfo=WIB)
+        tgl_bayar = min(datetime(th, bl, 5, 10, tzinfo=WIB), now - timedelta(hours=1))
+        for id_sewa, id_unit, id_penghuni, mulai, selesai in SEWA:
+            if tanggal_geser(mulai, hari_ini) > akhir or tanggal_geser(selesai, hari_ini) < awal:
+                continue
+            if offset == 0 and (id_sewa == SEWA_BELUM_DITAGIH or tanggal_geser(selesai, hari_ini) < hari_ini):
+                continue
+            _, id_prop, nomor, harga = unit[id_unit]
+            lunas = id_penghuni not in SEWA_BELUM_BAYAR.get(offset, ())
+            t = TagihanSewa(
+                id_sewa=id_sewa,
+                periode=periode,
+                jumlah=harga,
+                jatuh_tempo=date(th, bl, 10),
+                status="lunas" if lunas else "belum_dibayar",
+                dibayar_at=tgl_bayar if lunas else None,
+                created_at=terbit,
+            )
+            db.add(t)
+            db.flush()
+            if not lunas:
+                continue
+            db.add(
+                Pembayaran(
+                    untuk="sewa",
+                    id_tagihan=t.id,
+                    ref_gateway=ref_baru(),
+                    metode="va_bca",
+                    jumlah=harga,
+                    status="berhasil",
+                    alasan_gagal=None,
+                    direkonsiliasi=True,
+                    created_at=tgl_bayar,
+                )
+            )
+            db.add(
+                TransaksiKas(
+                    id_pemilik=properti[id_prop][2],
+                    waktu=tgl_bayar,
+                    jenis="sewa",
+                    keterangan=f"Sewa {nomor} {label_periode(periode)} · {nama[id_penghuni]}",
+                    jumlah=harga,
+                    ref=f"SWA-{t.id:04d}",
+                    properti=properti[id_prop][1],
+                )
+            )
     db.flush()
 
 
@@ -514,6 +641,7 @@ def isi_data(db: Session) -> None:
     now = now_utc()
     _isi_tiket(db, now)
     _isi_perbaikan(db, now)
+    _isi_tagihan_sewa(db, now)
     _isi_notifikasi(db, now)
     _setel_sequence(db)
 

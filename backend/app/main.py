@@ -14,11 +14,14 @@ from app.core.config import get_settings
 from app.core.db import cek_koneksi
 from app.core.errors import pasang_error_handler
 from app.services.entity.complaint_ticket.router import router as complaint_ticket_router
+from app.services.entity.financial_ledger.router import router as financial_ledger_router
 from app.services.entity.invoice.router import router as invoice_router
+from app.services.entity.rent_invoice.router import router as rent_invoice_router
 from app.services.entity.tenant_lease.router import router as tenant_lease_router
 from app.services.entity.work_order.router import router as work_order_router
 from app.services.task.csm.router import router as csm_router
 from app.services.task.hmr.router import router as hmr_router
+from app.services.task.rent_billing.router import router as rent_billing_router
 from app.services.utility.ai_classification.router import router as ai_router
 from app.services.utility.media_storage.router import router as media_router
 from app.services.utility.notification.router import router as notification_router
@@ -55,10 +58,13 @@ ROUTERS = (
     auth_router,
     hmr_router,  # Task
     csm_router,
+    rent_billing_router,
     tenant_lease_router,  # Entity
     complaint_ticket_router,
     work_order_router,
     invoice_router,
+    rent_invoice_router,
+    financial_ledger_router,
     media_router,  # Utility
     ai_router,
     notification_router,

@@ -1,6 +1,6 @@
-"""Pesan WhatsApp Repair Verification dan tagihan, dipakai Task HMR dan Complete and Settle Maintenance.
+"""Pesan WhatsApp perbaikan, invoice, dan tagihan sewa, dipakai Task HMR, CSM, dan Rent Billing.
 
-Teks sama dengan kabariPerbaikan dan kabariTagihan di frontend/src/mocks/services.ts.
+Teks sama dengan kabariPerbaikan, kabariTagihan, dan kabariSewa di frontend/src/mocks/services.ts.
 Bukan service tersendiri: hanya merakit isi pesan dari beberapa Entity lalu memanggil Utility Notification.
 """
 
@@ -8,11 +8,13 @@ from dataclasses import dataclass
 
 from sqlalchemy.orm import Session
 
-from app.core.format import jadwal, rupiah, tanggal
+from app.core.format import jadwal, label_periode, rupiah, tanggal
 from app.services.entity.complaint_ticket import service as complaint_ticket
 from app.services.entity.complaint_ticket.models import Tiket
 from app.services.entity.invoice.models import Invoice
 from app.services.entity.invoice.service import kode_invoice
+from app.services.entity.rent_invoice.models import TagihanSewa
+from app.services.entity.rent_invoice.service import kode_tagihan_sewa
 from app.services.entity.tenant_lease import service as tenant_lease
 from app.services.entity.tenant_lease.models import Pengguna
 from app.services.entity.work_order import service as work_order
@@ -154,3 +156,32 @@ def kabari_tagihan(db: Session, inv: Invoice, jenis: str, alasan: str | None = N
         "bayar_gagal": [(p.pemilik, f"Pembayaran {kode} gagal: {alasan}. Silakan coba lagi.")],
     }[jenis]
     return _kirim(db, complaint_ticket.kode_tiket(t.id), jenis, daftar)
+
+
+def kabari_sewa(db: Session, t: TagihanSewa, jenis: str, alasan: str | None = None) -> int:
+    """Kabar tagihan sewa ke penghuni (dan pemilik saat lunas). jenis: invoice | lunas | bayar_gagal."""
+    sw = tenant_lease.get_sewa(db, t.id_sewa)
+    unit = tenant_lease.info_unit(db, sw.id_unit)
+    penghuni = tenant_lease.get_pengguna(db, sw.id_penghuni)
+    pemilik = tenant_lease.get_pengguna(db, unit.id_pemilik)
+    kode = kode_tagihan_sewa(t.id)
+    bulan = label_periode(t.periode)
+    daftar = {
+        "invoice": [
+            (
+                penghuni,
+                f"Tagihan sewa {unit.nomor_unit} {bulan} {rupiah(t.jumlah)} ({kode}) sudah terbit. "
+                f"Jatuh tempo {tanggal(t.jatuh_tempo)}.",
+            )
+        ],
+        "lunas": [
+            (penghuni, f"Pembayaran sewa {bulan} {rupiah(t.jumlah)} berhasil. Terima kasih!"),
+            (
+                pemilik,
+                f"Sewa {unit.nomor_unit} {bulan} dibayar {penghuni.nama} ({rupiah(t.jumlah)}). "
+                "Tercatat di laporan kas.",
+            ),
+        ],
+        "bayar_gagal": [(penghuni, f"Pembayaran sewa {kode} gagal: {alasan}. Silakan coba lagi.")],
+    }[jenis]
+    return _kirim(db, kode, jenis, daftar)

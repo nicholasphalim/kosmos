@@ -1,7 +1,4 @@
-"""[Task: Complete and Settle Maintenance] endpoint HTTP. Orkestrasi ada di service.py.
-
-Pembayaran invoice (bayar, bayar sekaligus) ditambahkan di fase P6.
-"""
+"""[Task: Complete and Settle Maintenance] endpoint HTTP. Orkestrasi ada di service.py."""
 
 from typing import Literal
 
@@ -11,7 +8,7 @@ from pydantic import BaseModel, Field
 from app.core.db import DB
 from app.core.security import Pemilik, Penghuni, Teknisi
 from app.services.utility.media_storage.router import baca_upload
-from app.views.schemas import BuktiResponse, KonfirmasiResponse, WorkOrder
+from app.views.schemas import BayarResponse, BayarSekaligusResponse, BuktiResponse, KonfirmasiResponse, WorkOrder
 
 from . import service
 
@@ -37,6 +34,16 @@ class KonfirmasiRequest(BaseModel):
 class PenerimaanRequest(BaseModel):
     diterima: bool
     catatan: str | None = Field(default=None, max_length=300)
+
+
+class BayarRequest(BaseModel):
+    # metode dan jumlah invoice diperiksa service agar kode error-nya spesifik (METODE_TIDAK_VALID, dst.).
+    metode: str
+    simulasi_gagal: bool = False  # khusus demo: payment gateway mock menolak transaksi
+
+
+class BayarSekaligusRequest(BayarRequest):
+    id_invoice: list[int] = []
 
 
 @router.post("/work-order/{id_work_order}/log", response_model=WorkOrder, operation_id="catatLogServis")
@@ -89,3 +96,16 @@ def konfirmasi(id_work_order: int, body: KonfirmasiRequest, user: Penghuni, db: 
 def terima(id_work_order: int, body: PenerimaanRequest, user: Pemilik, db: DB):
     """Pemilik menerima hasil (tutup tiket, hitung komisi, terbitkan invoice) atau meminta perbaikan ulang."""
     return service.terima(db, user, id_work_order, body.diterima, body.catatan)
+
+
+# Rute statis didaftarkan sebelum /invoice/{id_invoice}/bayar supaya tidak tertukar.
+@router.post("/invoice/bayar-sekaligus", response_model=BayarSekaligusResponse, operation_id="bayarInvoiceSekaligus")
+def bayar_sekaligus(body: BayarSekaligusRequest, user: Pemilik, db: DB):
+    """Pemilik membayar beberapa invoice perbaikan dalam satu transaksi payment gateway (all-or-nothing)."""
+    return service.bayar_sekaligus(db, user, body.id_invoice, body.metode, body.simulasi_gagal)
+
+
+@router.post("/invoice/{id_invoice}/bayar", response_model=BayarResponse, operation_id="bayarInvoice")
+def bayar(id_invoice: int, body: BayarRequest, user: Pemilik, db: DB):
+    """Pemilik membayar invoice via payment gateway, rekonsiliasi, catat ke laporan kas, kirim notifikasi lunas."""
+    return service.bayar(db, user, id_invoice, body.metode, body.simulasi_gagal)

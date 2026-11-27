@@ -11,8 +11,13 @@ from app.core.errors import ServiceError
 from app.services.entity.complaint_ticket import service as complaint_ticket
 from app.services.entity.complaint_ticket.models import Keluhan as KeluhanRow
 from app.services.entity.complaint_ticket.models import Tiket
+from app.services.entity.financial_ledger import service as ledger
 from app.services.entity.invoice import service as invoice_svc
 from app.services.entity.invoice.models import Invoice as InvoiceRow
+from app.services.entity.payment import service as payment
+from app.services.entity.payment.models import Pembayaran as PembayaranRow
+from app.services.entity.rent_invoice import service as rent_invoice
+from app.services.entity.rent_invoice.models import TagihanSewa as TagihanSewaRow
 from app.services.entity.technician import service as technician
 from app.services.entity.tenant_lease import service as tenant_lease
 from app.services.entity.tenant_lease.models import Pengguna
@@ -26,11 +31,16 @@ from .schemas import (
     EstimasiBiaya,
     Invoice,
     Keluhan,
+    LaporanKas,
     LogServis,
+    Pembayaran,
+    RingkasanKas,
     RiwayatStatus,
+    TagihanSewa,
     TeknisiRingkas,
     TiketDetail,
     TiketRingkas,
+    TransaksiKas,
     WorkOrder,
 )
 
@@ -85,6 +95,23 @@ def invoice_untuk(db: Session, user: Pengguna, id_invoice: int) -> InvoiceRow:
     if not boleh_lihat_invoice(db, user, i):
         raise ServiceError(404, "INVOICE_TIDAK_ADA", "Invoice tidak ditemukan.")
     return i
+
+
+def boleh_lihat_tagihan_sewa(db: Session, user: Pengguna, t: TagihanSewaRow) -> bool:
+    """Penghuni melihat tagihannya sendiri, pemilik melihat tagihan di propertinya."""
+    sw = tenant_lease.get_sewa(db, t.id_sewa)
+    if user.role == "penghuni":
+        return sw.id_penghuni == user.id
+    if user.role == "pemilik":
+        return tenant_lease.info_unit(db, sw.id_unit).id_pemilik == user.id
+    return False
+
+
+def tagihan_sewa_untuk(db: Session, user: Pengguna, id_tagihan: int) -> TagihanSewaRow:
+    t = rent_invoice.get(db, id_tagihan)
+    if not boleh_lihat_tagihan_sewa(db, user, t):
+        raise ServiceError(404, "TAGIHAN_SEWA_TIDAK_ADA", "Tagihan sewa tidak ditemukan.")
+    return t
 
 
 def keluhan_untuk(db: Session, user: Pengguna, id_keluhan: int) -> KeluhanRow:
@@ -207,6 +234,14 @@ def work_order(db: Session, w: WorkOrderRow) -> WorkOrder:
     )
 
 
+def pembayaran(p: PembayaranRow) -> Pembayaran:
+    return Pembayaran.model_validate(p, from_attributes=True)
+
+
+def riwayat_pembayaran(db: Session, untuk: str, id_tagihan: int) -> list[Pembayaran]:
+    return [pembayaran(p) for p in payment.list_untuk(db, untuk, id_tagihan)]
+
+
 def invoice(db: Session, i: InvoiceRow) -> Invoice:
     w = work_order_svc.get(db, i.id_work_order)
     t = complaint_ticket.get_tiket(db, w.id_tiket)
@@ -233,6 +268,57 @@ def invoice(db: Session, i: InvoiceRow) -> Invoice:
         jenis=i.jenis,  # type: ignore[arg-type]
         jatuh_tempo=i.jatuh_tempo,
         dibayar_at=i.dibayar_at,
-        pembayaran=[],  # riwayat percobaan pembayaran (Entity Payment) ditambahkan di fase P6
+        pembayaran=riwayat_pembayaran(db, "invoice", i.id),
         created_at=i.created_at,
+    )
+
+
+def tagihan_sewa(db: Session, t: TagihanSewaRow) -> TagihanSewa:
+    sw = tenant_lease.get_sewa(db, t.id_sewa)
+    return TagihanSewa(
+        id=t.id,
+        kode=rent_invoice.kode_tagihan_sewa(t.id),
+        periode=t.periode,
+        unit=tenant_lease.unit_ringkas(db, sw.id_unit),
+        penghuni=tenant_lease.to_pengguna(tenant_lease.get_pengguna(db, sw.id_penghuni)),
+        jumlah=t.jumlah,
+        status=t.status,  # type: ignore[arg-type]
+        terlambat=rent_invoice.terlambat(t),
+        jatuh_tempo=t.jatuh_tempo,
+        dibayar_at=t.dibayar_at,
+        pembayaran=riwayat_pembayaran(db, "sewa", t.id),
+        created_at=t.created_at,
+    )
+
+
+def laporan_kas(db: Session, user: Pengguna) -> LaporanKas:
+    """Get Laporan Kas (Financial Ledger) + ringkasan invoice dan tagihan sewa tertunda (Invoice, Rent Invoice)."""
+    transaksi = ledger.list_kas(db, user.id)
+
+    def jumlah(jenis: str) -> int:
+        return sum(abs(k.jumlah) for k in transaksi if k.jenis == jenis)
+
+    semua = [i for i in invoice_svc.list_invoice(db) if boleh_lihat_invoice(db, user, i)]
+    tertunda = [i for i in semua if i.status == "belum_dibayar"]
+    sewa_tertunda = [
+        t
+        for t in rent_invoice.list_tagihan(db)
+        if t.status == "belum_dibayar" and boleh_lihat_tagihan_sewa(db, user, t)
+    ]
+    pengeluaran = jumlah("pembayaran_teknisi") + jumlah("komisi")
+    return LaporanKas(
+        ringkasan=RingkasanKas(
+            pemasukan_sewa=jumlah("sewa"),
+            pengeluaran=pengeluaran,
+            saldo=jumlah("sewa") - pengeluaran,
+            sewa_tertunda=len(sewa_tertunda),
+            nilai_sewa_tertunda=sum(t.jumlah for t in sewa_tertunda),
+            pembayaran_teknisi=jumlah("pembayaran_teknisi"),
+            komisi=jumlah("komisi"),
+            invoice_lunas=len(semua) - len(tertunda),
+            invoice_tertunda=len(tertunda),
+            invoice_terlambat=sum(invoice_svc.terlambat(i) for i in tertunda),
+            nilai_tertunda=sum(i.total for i in tertunda),
+        ),
+        transaksi=[TransaksiKas.model_validate(k, from_attributes=True) for k in transaksi],
     )

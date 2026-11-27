@@ -252,3 +252,84 @@ class KonfirmasiResponse(BaseModel):
     tiket: TiketDetail
     invoice: Invoice | None
     trace: list[TraceStep]
+
+
+class BayarResponse(BaseModel):
+    hasil: Literal["berhasil", "gagal"]
+    invoice: Invoice
+    pembayaran: Pembayaran
+    alasan: str | None
+    trace: list[TraceStep]
+
+
+class BayarSekaligusResponse(BaseModel):
+    hasil: Literal["berhasil", "gagal"]
+    invoice: list[Invoice]
+    ref_gateway: str
+    total: int
+    alasan: str | None
+    trace: list[TraceStep]
+
+
+# ---------- Rent Billing ----------
+
+
+class TagihanSewa(BaseModel):
+    id: int
+    kode: str
+    periode: str
+    unit: UnitRingkas
+    penghuni: Pengguna
+    jumlah: int
+    status: Literal["belum_dibayar", "lunas"]
+    terlambat: bool
+    jatuh_tempo: date
+    dibayar_at: datetime | None
+    pembayaran: list[Pembayaran]
+    created_at: datetime
+
+
+class TerbitkanSewaResponse(BaseModel):
+    periode: str
+    dibuat: list[TagihanSewa]
+    trace: list[TraceStep]
+
+
+class BayarSewaResponse(BaseModel):
+    hasil: Literal["berhasil", "gagal"]
+    tagihan: TagihanSewa
+    pembayaran: Pembayaran
+    alasan: str | None
+    trace: list[TraceStep]
+
+
+# ---------- Financial Ledger ----------
+
+
+class TransaksiKas(BaseModel):
+    id: int
+    waktu: datetime
+    jenis: Literal["sewa", "pembayaran_teknisi", "komisi"]
+    keterangan: str
+    jumlah: int
+    ref: str
+    properti: str
+
+
+class RingkasanKas(BaseModel):
+    pemasukan_sewa: int
+    pengeluaran: int
+    saldo: int
+    sewa_tertunda: int
+    nilai_sewa_tertunda: int
+    pembayaran_teknisi: int
+    komisi: int
+    invoice_lunas: int
+    invoice_tertunda: int
+    invoice_terlambat: int
+    nilai_tertunda: int
+
+
+class LaporanKas(BaseModel):
+    ringkasan: RingkasanKas
+    transaksi: list[TransaksiKas]
