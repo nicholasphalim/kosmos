@@ -29,7 +29,7 @@ Data demo mode mock disimpan di localStorage browser. Untuk mengembalikan data a
 | `npm run gen:api` | Generate tipe TypeScript dari `../contracts/openapi.yaml` |
 | `npm run typecheck` | Cek tipe (dipakai juga untuk mendeteksi kontrak yang bergeser) |
 | `npm run lint` | ESLint |
-| `npm run test:e2e:live` | Playwright mode live: menjalankan FastAPI (port 8001) dan frontend (port 3101) sendiri. Memakai database dari `backend/.env` (`kosmos-dev`) dan me-reset-nya sebelum setiap tes |
+| `npm run test:e2e:live` | Playwright mode live: 22 skenario yang sama dengan mode mock. Menjalankan FastAPI (port 8001) dan frontend (port 3101) sendiri, memakai database dari `backend/.env` (`kosmos-dev`) dan me-reset-nya sebelum setiap tes. Jangan jalankan bersamaan dengan `uv run pytest`, karena keduanya memakai database yang sama |
 | `npm run demo:reset` | Kembalikan data demo ke kondisi awal (refresh browser setelahnya) |
 | `npm run test:e2e` | Playwright mode mock: 22 skenario. Build dulu dalam mode mock: `NEXT_PUBLIC_API_MODE=mock npm run build` (PowerShell: `$env:NEXT_PUBLIC_API_MODE="mock"; npm run build`) |
 

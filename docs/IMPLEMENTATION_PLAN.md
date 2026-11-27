@@ -10,7 +10,7 @@ Deadline: minggu ke-2/3 Desember 2026.
 
 Status (25 Nov 2026):
 - Frontend keempat proses selesai dan berjalan penuh di mode mock (19 skenario E2E).
-- Backend dibangun ulang di branch `backend-v2`: PostgreSQL di Supabase, login Google lewat Supabase Auth. P0–P6 selesai (P0–P3 sudah masuk `main` lewat PR #4, #5): semua endpoint di kontrak sudah diimplementasikan. Berikutnya P7 (hardening), lihat §7.8.
+- Backend dibangun ulang di branch `backend-v2`: PostgreSQL di Supabase, login Google lewat Supabase Auth. P0–P6 selesai (P0–P3 sudah masuk `main` lewat PR #4, #5): semua endpoint di kontrak sudah diimplementasikan. P7 (hardening) sedang berjalan, lihat §7.8.
 - Backend versi pertama (SQLite, alur lama) diarsipkan di branch `backend-b0` sebagai referensi.
 
 ---
@@ -496,6 +496,9 @@ Urgensi: `korslet|percikan|memercik|api|banjir|gosong|asap|setrum` → tinggi; `
 **Keputusan keamanan:**
 - Pesan error login tidak membedakan "email tidak ada" dan "sudah terhubung ke akun Google lain", supaya daftar email tidak bisa ditebak.
 - Email hanya bisa dikoreksi selama penghuni belum pernah login Google (`409 SUDAH_TERHUBUNG`).
+- Token Supabase hanya diterima bila login lewat Google (`app_metadata.providers` memuat `google`). Email dari Google sudah terverifikasi; tanpa cek ini, akun email/password Supabase dengan email penghuni yang belum pernah login bisa mengambil alih akun itu.
+- Upload hanya menerima JPG, PNG, WebP, GIF, HEIC, dan MP4, dan ekstensi file disimpan menurut tipe itu (bukan nama file dari klien), supaya SVG atau HTML berisi script tidak bisa disajikan. File yang melebihi batas ditolak sebelum dibaca ke memori.
+- Error tak terduga dibalas `500 KESALAHAN_SERVER` tanpa detail; stack trace hanya di log server.
 - Frontend menyimpan sesi Supabase dengan mekanisme bawaan `supabase-js` (localStorage). Cukup untuk prototype. Cookie `httpOnly` dicatat sebagai pengembangan berikutnya.
 
 ### 7.3 Struktur folder
@@ -666,7 +669,7 @@ QR code untuk slide 44 mengarah ke URL frontend yang di-deploy.
 
 ## 11. Skenario demo
 
-Semua skenario berjalan di mode mock. Mode live menyusul per fase (§7.8).
+Semua skenario berjalan di mode mock dan mode live (diuji E2E di keduanya).
 
 1. **Dea** (sewa aktif) mengirim "AC kamar tidak dingin dan menetes air" + foto. Hasil: tiket `diklasifikasi`, kategori AC, urgensi sedang. Outbox WA berisi pesan ke Dea dan Pak Derren.
 2. **Qiqa** (sewa berakhir) mengirim keluhan. Hasil: ditolak dengan alasan sewa tidak aktif, dan tidak ada tiket yang dibuat.
