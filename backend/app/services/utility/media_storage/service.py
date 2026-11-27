@@ -5,7 +5,6 @@ Agnostic: tidak tahu apa itu keluhan atau work order, hanya (owner_type, owner_i
 
 import uuid
 from dataclasses import dataclass
-from pathlib import PurePosixPath
 
 from pydantic import BaseModel
 from sqlalchemy import select
@@ -21,7 +20,16 @@ from .models import Lampiran
 MAKS_FILE = 3
 BATAS_GAMBAR = 5 * 1024 * 1024
 BATAS_VIDEO = 20 * 1024 * 1024
-EKSTENSI = {"image/jpeg": ".jpg", "image/png": ".png", "image/webp": ".webp", "image/gif": ".gif", "video/mp4": ".mp4"}
+# Hanya tipe ini yang diterima. Ekstensi file selalu diambil dari sini, bukan dari nama file kiriman klien,
+# supaya file seperti "x.html" atau SVG berisi script tidak tersimpan lalu disajikan sebagai halaman.
+EKSTENSI = {
+    "image/jpeg": ".jpg",
+    "image/png": ".png",
+    "image/webp": ".webp",
+    "image/gif": ".gif",
+    "image/heic": ".heic",
+    "video/mp4": ".mp4",
+}
 
 
 @dataclass
@@ -56,17 +64,19 @@ def validasi(files: list[FileMasuk]) -> None:
     if len(files) > MAKS_FILE:
         raise ServiceError(422, "LAMPIRAN_TERLALU_BANYAK", "Maksimal 3 file lampiran.")
     for f in files:
+        if f.mime not in EKSTENSI:
+            raise ServiceError(
+                422, "TIPE_FILE_DITOLAK", f"{f.nama}: hanya foto (JPG, PNG, WebP, GIF, HEIC) atau video MP4."
+            )
         gambar = f.mime.startswith("image/")
         video = f.mime == "video/mp4"
-        if not gambar and not video:
-            raise ServiceError(422, "TIPE_FILE_DITOLAK", f"{f.nama}: hanya gambar atau video mp4.")
         if (gambar and f.ukuran > BATAS_GAMBAR) or (video and f.ukuran > BATAS_VIDEO):
             raise ServiceError(422, "FILE_TERLALU_BESAR", f"{f.nama} melebihi batas ukuran.")
 
 
 def simpan(db: Session, f: FileMasuk, owner_type: str, owner_id: int = 0) -> Lampiran:
     """Add Lampiran Media: unggah ke storage, lalu catat metadata. Nama objek acak supaya tidak bisa ditebak."""
-    ekstensi = EKSTENSI.get(f.mime) or PurePosixPath(f.nama).suffix.lower()[:8]
+    ekstensi = EKSTENSI[f.mime]  # validasi() sudah memastikan tipe ini ada
     path = f"{owner_type}/{now_utc():%Y/%m}/{uuid.uuid4().hex}{ekstensi}"
     _adapter().unggah(path, f.isi, f.mime)
     row = Lampiran(

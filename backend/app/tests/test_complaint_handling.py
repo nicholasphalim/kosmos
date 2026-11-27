@@ -62,6 +62,11 @@ def test_validasi_keluhan(api):
     assert _ajukan(api, 1, "AC kamar tidak dingin", [FOTO] * 4).json()["error"]["kode"] == "LAMPIRAN_TERLALU_BANYAK"
     pdf = ("x.pdf", b"%PDF", "application/pdf")
     assert _ajukan(api, 1, "AC kamar tidak dingin", [pdf]).json()["error"]["kode"] == "TIPE_FILE_DITOLAK"
+    # SVG bisa berisi script, dan tipe image/* sembarang bisa disimpan dengan ekstensi .html.
+    svg = ("x.svg", b"<svg onload=alert(1)>" * 100, "image/svg+xml")
+    html = ("x.html", b"<script>alert(1)</script>" * 100, "image/x-palsu")
+    for f in (svg, html):
+        assert _ajukan(api, 1, "AC kamar tidak dingin", [f]).json()["error"]["kode"] == "TIPE_FILE_DITOLAK"
 
 
 def test_hanya_penghuni_yang_bisa_melapor(api):

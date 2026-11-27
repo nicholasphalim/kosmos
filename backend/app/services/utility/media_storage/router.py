@@ -13,6 +13,9 @@ router = APIRouter(tags=["Utility: Media Storage"])
 
 
 async def baca_upload(f: UploadFile) -> FileMasuk:
+    # Tolak sebelum isi file dibaca ke memori. Batas per tipe tetap diperiksa service.validasi().
+    if f.size is not None and f.size > service.BATAS_VIDEO:
+        raise ServiceError(422, "FILE_TERLALU_BESAR", f"{f.filename or 'file'} melebihi batas ukuran.")
     return FileMasuk(nama=f.filename or "file", mime=f.content_type or "application/octet-stream", isi=await f.read())
 
 

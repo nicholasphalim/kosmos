@@ -102,6 +102,21 @@ def test_google_token_tidak_sah_401(api):
         assert api.get(ME, headers=bearer(t)).status_code == 401
 
 
+def test_hanya_login_google_yang_diterima(api, seeded):
+    """Akun email/password Supabase dengan email penghuni tidak boleh menghubungkan diri ke akun penghuni."""
+    kasus = [
+        token_supabase("dea@kosmos.test", app_metadata={"provider": "email", "providers": ["email"]}),
+        token_supabase("dea@kosmos.test", app_metadata={}),
+        token_supabase("dea@kosmos.test", app_metadata="google"),
+    ]
+    for t in kasus:
+        assert api.get(ME, headers=bearer(t)).status_code == 401
+    assert seeded.get(Pengguna, 1).auth_user_id is None
+    # Akun yang memakai beberapa provider tetap diterima selama salah satunya Google.
+    t = token_supabase("dea@kosmos.test", app_metadata={"provider": "email", "providers": ["email", "google"]})
+    assert api.get(ME, headers=bearer(t)).status_code == 200
+
+
 def test_role_salah_403(api):
     res = api.get("/api/v1/pemilik/unit", headers=login_demo(api, 1))
     assert res.status_code == 403

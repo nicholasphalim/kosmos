@@ -105,6 +105,7 @@ def token_supabase(email: str, sub: uuid.UUID | None = None, **ubah) -> str:
         "sub": str(sub or uuid.uuid4()),
         "email": email,
         "role": "authenticated",
+        "app_metadata": {"provider": "google", "providers": ["google"]},
         "exp": datetime.now(UTC) + timedelta(hours=1),
     } | ubah
     return jwt.encode(payload, _KUNCI_TEST, algorithm="ES256")
