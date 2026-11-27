@@ -1,8 +1,10 @@
-import { expect, test, type Page } from "@playwright/test";
+import type { Page } from "@playwright/test";
+import { expect, test } from "./fixtures";
 
 /**
- * Pendaftaran penghuni oleh pemilik (pengganti sign up, plan §11b #9) di mode mock.
- * Login Google tidak tersedia di mode mock; alur Google dites manual/live (plan §11 skenario 12).
+ * Pendaftaran penghuni oleh pemilik (pengganti sign up, plan §11b #9).
+ * Mode mock: localStorage bersih per tes. Mode live: database backend di-reset sebelum setiap tes (e2e/fixtures.ts).
+ * Login Google tidak dites otomatis (tes memakai demo login); alur Google dites manual (plan §11 skenario 12).
  */
 
 async function masukPemilik(page: Page) {
@@ -45,6 +47,8 @@ test("Sewa lagi: penghuni dengan sewa berakhir kembali aktif", async ({ page }) 
   const qiqa = page.getByRole("listitem").filter({ hasText: "Qiqa" });
   await expect(qiqa.getByText("Sewa tidak aktif")).toBeVisible();
   await qiqa.getByRole("button", { name: "Sewa lagi" }).click();
+  // Mode live: tunggu daftar unit termuat; select `required` tanpa opsi membatalkan submit.
+  await expect(qiqa.getByLabel("Unit")).toHaveValue("8");
   await qiqa.getByRole("button", { name: "Buat sewa" }).click();
   await expect(page.getByRole("listitem").filter({ hasText: "Qiqa" }).getByText("Sewa aktif")).toBeVisible();
 });

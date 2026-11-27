@@ -17,15 +17,8 @@ const WEB = "http://localhost:3101";
 process.env.E2E_API_URL = API;
 process.env.NEXT_PUBLIC_API_BASE_URL = API;
 
-// Billing dan Rent Billing di backend menyusul di fase P6: skenario pembayaran belum dijalankan.
-process.env.E2E_TANPA_PEMBAYARAN = "1";
-const SPEC_LIVE = ["complaint-handling.spec.ts", "repair-billing.spec.ts"];
-const BELUM_LIVE = /Skenario (7|9|10|11):/;
-
 export default defineConfig({
   ...base,
-  testMatch: SPEC_LIVE,
-  grepInvert: BELUM_LIVE,
   use: { ...base.use, baseURL: WEB },
   webServer: [
     {

@@ -7,9 +7,6 @@ import { expect, test } from "./fixtures";
  * Mode live: database backend di-reset sebelum setiap tes (e2e/fixtures.ts).
  */
 
-// Mode live sebelum fase P6: endpoint pembayaran belum ada, jadi langkah bayar dilewati.
-const TANPA_PEMBAYARAN = process.env.E2E_TANPA_PEMBAYARAN === "1";
-
 const TAB_ROLE: Record<string, string> = { "Pak Derren": "Pemilik", "Pak Slamet": "Teknisi" };
 
 async function masukSebagai(page: Page, nama: string) {
@@ -82,7 +79,6 @@ test("Skenario 5: pemilik memanggil teknisi, penghuni konfirmasi selesai, pemili
   await page.getByRole("link", { name: "Bayar tagihan" }).click();
   await expect(page).toHaveURL(/\/pemilik\/tagihan\/\d+/);
   await expect(page.getByText("Ditagihkan ke")).toBeVisible();
-  if (TANPA_PEMBAYARAN) return;
   await page.getByRole("button", { name: /^Bayar Rp/ }).click();
   await expect(page.getByRole("heading", { name: "Lunas" })).toBeVisible({ timeout: 10_000 });
   await expect(page.getByText("Berhasil · direkonsiliasi")).toBeVisible();
