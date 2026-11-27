@@ -8,9 +8,10 @@ Proses bisnis yang diprototype:
 
 Deadline: minggu ke-2/3 Desember 2026.
 
-Status (25 Nov 2026):
-- Frontend keempat proses selesai dan berjalan penuh di mode mock (19 skenario E2E).
-- Backend dibangun ulang di branch `backend-v2`: PostgreSQL di Supabase, login Google lewat Supabase Auth. P0–P6 selesai (P0–P3 sudah masuk `main` lewat PR #4, #5): semua endpoint di kontrak sudah diimplementasikan. P7 (hardening) sedang berjalan, lihat §7.8.
+Status (27 Nov 2026):
+- Frontend keempat proses berjalan di mode mock dan mode live (22 skenario E2E, lulus di kedua mode).
+- Backend FastAPI (PostgreSQL di Supabase, login Google lewat Supabase Auth) selesai P0–P7 dan sudah di-merge ke `main`: semua 42 operasi di kontrak (v0.3.2) diimplementasikan.
+- Production (`kosmos-lasti.vercel.app`) berjalan dalam mode live dengan DEMO_MODE; akun demo ada di balik tombol "Coba demo". Yang tersisa: gladi demo 2× oleh kelompok.
 - Backend versi pertama (SQLite, alur lama) diarsipkan di branch `backend-b0` sebagai referensi.
 
 ---
@@ -320,6 +321,12 @@ Aturan umum:
 - **Otorisasi data:** daftar otomatis difilter. Penghuni hanya melihat tiket dan tagihan sewa miliknya. Pemilik hanya melihat data dari properti miliknya. Teknisi hanya melihat work order yang ditugaskan kepadanya.
 - **Privasi:** skema `Pengguna` yang muncul di tiket, work order, dan invoice tidak memuat email atau nomor WhatsApp. Email hanya muncul di `/auth/me` (milik sendiri) dan daftar penghuni milik pemilik.
 - **Batas lampiran:** maksimal 5 file (service contract Layanan Pengajuan Keluhan di D2). Gambar jpg/png/webp maksimal 5 MB. Video mp4 maksimal 20 MB. Hanya gambar yang dihitung untuk AI.
+- **Validasi sesuai dunia nyata** (`backend/app/core/validasi.py`, sama dengan `frontend/src/lib/validasi.ts`):
+  - Nama orang: huruf, spasi, titik, tanda petik, tanda hubung; diawali huruf, minimal 2 huruf.
+  - Nomor WhatsApp: nomor HP Indonesia (+62, 62, atau 08), 10–13 digit, disimpan sebagai `0812-3456-7890`.
+  - Periode sewa baru: selesai setelah mulai, belum berakhir, mulai paling lambat 1 tahun lagi, durasi maksimal 5 tahun.
+  - Teks bebas (deskripsi keluhan, alasan, catatan teknisi): minimal 3 huruf, bukan hanya angka atau simbol.
+  - Biaya tambahan: Rp 1.000 sampai Rp 5.000.000, kelipatan Rp 100.
 
 ---
 
@@ -599,7 +606,7 @@ Setiap fase dikerjakan di branch `backend-v2` dan masuk ke `main` lewat satu pul
 | **P4 Complaint Handling** | HMR keluhan, status, klasifikasi ulang, buka ulang. Tenant and Lease, Complaint Ticket. Media Storage (Supabase), AI Classification, Notification | E2E live skenario 1–4 | 2–4 Des |
 | **P5 Repair Verification** | Estimasi, persetujuan, jadwal, biaya tambahan, log, bukti, konfirmasi, terima. Technician, Work Order, empat Micro | E2E live skenario 5, 5b, 5c, 6, 8, 8b | 5–7 Des |
 | **P6 Billing + Rent Billing** | Invoice, bayar, bayar sekaligus, tagihan sewa, Payment, Financial Ledger, payment gateway mock | E2E live skenario 7, 9, 10, 11 | 8–9 Des |
-| **P7 Hardening** | Review keamanan, README, naskah demo, penyelarasan dengan D2 final, keputusan production | Semua E2E live hijau, gladi demo 2× tanpa error | 10–12 Des |
+| **P7 Hardening** | Review keamanan, validasi input sesuai dunia nyata, README, naskah demo, penyelarasan dengan D2 final, production ke mode live | Semua E2E live hijau, gladi demo 2× tanpa error | 10–12 Des |
 
 ### 7.9 Persiapan akun (P1)
 
@@ -644,7 +651,7 @@ CI (GitHub Actions) menjalankan ruff, pytest (dengan service container Postgres)
 | Migrasi | Dijalankan saat deploy (`alembic upgrade head` sebagai pre-deploy command Railway) | |
 | CORS | `CORS_ORIGINS` di env backend | Hanya domain Vercel + localhost |
 
-**Lingkungan uji live selama P3–P6.** Production Vercel (`main`) tetap mode mock sampai P6 selesai, supaya halaman yang backend-nya belum dibuat tidak rusak. Mode live diuji di lokal (`kosmos-dev`) dan di Preview Vercel branch `backend-v2` dengan env khusus Preview (`NEXT_PUBLIC_API_MODE=live`, URL Railway, Supabase `kosmos-demo`). Domain preview itu ditambahkan ke `CORS_ORIGINS` Railway dan Redirect URLs Supabase `kosmos-demo`.
+**Lingkungan.** Selama P3–P6, production Vercel (`main`) tetap mode mock dan mode live diuji di Preview branch `backend-v2`. Setelah P7, production juga mode live: env Production Vercel (`NEXT_PUBLIC_API_MODE=live`, URL Railway, Supabase `kosmos-demo`), domain production di `CORS_ORIGINS` Railway dan Redirect URLs Supabase, dan Railway men-deploy dari `main`. Preview dan production memakai backend dan database yang sama, jadi Reset data demo di salah satunya mengubah keduanya. Pengembangan lokal dan tes otomatis tetap memakai `kosmos-dev`.
 
 Rencana cadangan demo: frontend mode mock (`npm run dev` di `frontend/`) tetap berfungsi walaupun backend atau Supabase mati.
 
@@ -662,7 +669,7 @@ D2 final (sudah dikumpulkan) memuat QR ke repository GitHub di slide 41.
 | 1. Frontend Complaint Handling | 16–22 Nov | Login demo, form keluhan, dashboard penghuni dan pemilik, outbox WA | Selesai |
 | 2. Frontend Repair Verification, Billing, Rent Billing | 23–24 Nov | Halaman teknisi, tinjau tiket, estimasi, biaya tambahan, work order, invoice, bayar sekaligus, tagihan sewa, laporan kas, landing page | Selesai |
 | 3. Backend | 25 Nov–9 Des | Fase P0–P6 di §7.8 | Selesai |
-| 4. Buffer | 10–14 Des | P7: bug fix, naskah demo, screenshot Swagger, QR | Belum |
+| 4. Buffer | 10–14 Des | P7: hardening, naskah demo, production live | Selesai, tinggal gladi demo |
 
 ---
 
