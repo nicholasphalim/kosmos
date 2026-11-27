@@ -53,7 +53,7 @@ import type {
 } from "@/lib/api/types";
 import { jadwal as fmtJadwal, kodeInvoice, kodeTagihanSewa, LABEL_KATEGORI, LABEL_METODE, labelPeriode, rupiah, tanggal } from "@/lib/format";
 import { buatJudul, klasifikasiKeyword } from "@/lib/klasifikasi";
-import { GALAT_NO_WA, galatNama, galatPeriodeSewa, normalisasiNoWa, rapikanNama, teksBermakna } from "@/lib/validasi";
+import { GALAT_NO_WA, galatNama, galatPeriodeSewa, hariIniWib, normalisasiNoWa, rapikanNama, teksBermakna } from "@/lib/validasi";
 import {
   commit,
   db,
@@ -219,7 +219,7 @@ export const tenantLease = {
       .sewa.filter((s) => s.id_unit === idUnit && (idPenghuni === undefined || s.id_penghuni === idPenghuni))
       .sort((a, b) => b.tanggal_mulai.localeCompare(a.tanggal_mulai))[0];
     if (!sewa) throw new ServiceError(404, "SEWA_TIDAK_ADA", "Unit belum pernah disewa.");
-    const hariIni = new Date().toISOString().slice(0, 10);
+    const hariIni = hariIniWib();
     const aktif = sewa.tanggal_mulai <= hariIni && hariIni <= sewa.tanggal_selesai;
     return {
       id_unit: idUnit,
@@ -263,7 +263,7 @@ export const tenantLease = {
 
   /** Sewa yang aktif hari ini di sebuah unit, atau null. */
   sewaAktif(idUnit: number): SewaRow | null {
-    const hariIni = new Date().toISOString().slice(0, 10);
+    const hariIni = hariIniWib();
     return db().sewa.find((s) => s.id_unit === idUnit && s.tanggal_mulai <= hariIni && hariIni <= s.tanggal_selesai) ?? null;
   },
 
@@ -284,7 +284,7 @@ export const tenantLease = {
   /** Satu baris per penghuni: sewa terbarunya di properti pemilik. */
   penghuniTerdaftar(p: PenggunaRow, sw: SewaRow): PenghuniTerdaftar {
     const { id_pemilik: _, ...unit } = tenantLease.unitRingkas(sw.id_unit);
-    const hariIni = new Date().toISOString().slice(0, 10);
+    const hariIni = hariIniWib();
     return {
       pengguna: toPengguna(p),
       email: p.email,
@@ -1296,7 +1296,7 @@ export const invoice = {
   },
 
   /** Belum dibayar dan sudah lewat jatuh tempo (dihitung, tidak disimpan). */
-  terlambat(i: InvoiceRow, hariIni = new Date().toISOString().slice(0, 10)): boolean {
+  terlambat(i: InvoiceRow, hariIni = hariIniWib()): boolean {
     return i.status === "belum_dibayar" && hariIni > i.jatuh_tempo;
   },
 
@@ -1424,7 +1424,7 @@ export const rentInvoice = {
     return row;
   },
 
-  terlambat(t: TagihanSewaRow, hariIni = new Date().toISOString().slice(0, 10)): boolean {
+  terlambat(t: TagihanSewaRow, hariIni = hariIniWib()): boolean {
     return t.status === "belum_dibayar" && hariIni > t.jatuh_tempo;
   },
 

@@ -49,7 +49,10 @@ function geserTahun(iso: string, tahun: number): string {
   return `${th + tahun}-${String(bl).padStart(2, "0")}-${String(hari).padStart(2, "0")}`;
 }
 
-/** Tanggal hari ini (WIB) dalam format YYYY-MM-DD, seperti `today()` di backend. */
+/**
+ * Tanggal hari ini (WIB) dalam format YYYY-MM-DD, seperti `today()` di backend.
+ * Jangan pakai `new Date().toISOString()`: itu tanggal UTC, yang tertinggal sehari antara pukul 00.00 dan 07.00 WIB.
+ */
 export function hariIniWib(): string {
   return new Date(Date.now() + 7 * 3_600_000).toISOString().slice(0, 10);
 }
