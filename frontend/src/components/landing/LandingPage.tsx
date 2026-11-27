@@ -202,7 +202,12 @@ export function LandingPage() {
             <Logo tone="light" size={52} />
             <p className="max-w-[360px] leading-relaxed text-hero-sub">Platform manajemen kos untuk keluhan, perbaikan, dan tagihan.</p>
           </div>
-          <p className="text-sm text-hero-sub">II3120 Layanan Sistem dan Teknologi Informasi</p>
+          <div className="flex flex-col items-start gap-2 text-sm text-hero-sub sm:items-end">
+            <Link href="/privasi" className="font-semibold text-white underline underline-offset-2">
+              Kebijakan Privasi
+            </Link>
+            <p>II3120 Layanan Sistem dan Teknologi Informasi</p>
+          </div>
         </div>
       </footer>
     </div>
