@@ -527,11 +527,10 @@ backend/
    │  │              evidence_verification.py, commission_calculation.py,
    │  │              pembulatan.py (pembulatan setengah ke atas seperti Math.round)
    │  ├─ entity/     tenant_lease/, complaint_ticket/, technician/, work_order/,
-   │  │              invoice/, rent_invoice/, payment/, financial_ledger/
+   │  │              invoice/, rent_invoice/, payment/ (adapters/mock.py: payment gateway), financial_ledger/
    │  └─ utility/    media_storage/   (adapters/local.py, adapters/supabase.py)
    │                 ai_classification/ (adapters/mock.py, adapters/llm.py)
    │                 notification/    (adapters/mock.py)
-   │                 payment_gateway/ (adapters/mock.py)
    └─ tests/
 ```
 
@@ -600,7 +599,7 @@ Setiap fase dikerjakan di branch `backend-v2` dan masuk ke `main` lewat satu pul
 | **P4 Complaint Handling** | HMR keluhan, status, klasifikasi ulang, buka ulang. Tenant and Lease, Complaint Ticket. Media Storage (Supabase), AI Classification, Notification | E2E live skenario 1–4 | 2–4 Des |
 | **P5 Repair Verification** | Estimasi, persetujuan, jadwal, biaya tambahan, log, bukti, konfirmasi, terima. Technician, Work Order, empat Micro | E2E live skenario 5, 5b, 5c, 6, 8, 8b | 5–7 Des |
 | **P6 Billing + Rent Billing** | Invoice, bayar, bayar sekaligus, tagihan sewa, Payment, Financial Ledger, payment gateway mock | E2E live skenario 7, 9, 10, 11 | 8–9 Des |
-| **P7 Hardening** | Review keamanan, README, naskah demo, screenshot Swagger untuk slide 41–43, QR | Semua E2E live hijau, gladi demo 2× tanpa error | 10–12 Des |
+| **P7 Hardening** | Review keamanan, README, naskah demo, penyelarasan dengan D2 final, keputusan production | Semua E2E live hijau, gladi demo 2× tanpa error | 10–12 Des |
 
 ### 7.9 Persiapan akun (P1)
 
@@ -651,7 +650,7 @@ Rencana cadangan demo: frontend mode mock (`npm run dev` di `frontend/`) tetap b
 
 Catatan demo: dengan `DEMO_MODE=true`, siapa pun yang tahu URL bisa masuk sebagai persona demo dan me-reset data. Ini diterima untuk demo kelas. Untuk pemakaian sungguhan, `DEMO_MODE=false`.
 
-QR code untuk slide 44 mengarah ke URL frontend yang di-deploy.
+D2 final (sudah dikumpulkan) memuat QR ke repository GitHub di slide 41.
 
 ---
 
@@ -714,26 +713,20 @@ Keputusan desain yang perlu disepakati kelompok:
    - **Bayar sekaligus**: pemilik membayar beberapa invoice perbaikan dalam satu transaksi gateway (satu `ref_gateway`, satu baris Payment per invoice). All-or-nothing: kalau gateway menolak, tidak ada invoice yang lunas.
 7. Evidence Verification versi mock memeriksa metadata (dua foto, format gambar, tidak identik, ukuran ≥ 1 KB). Versi akhir bisa memakai LLM vision seperti AI Classification.
 8. Payment gateway memakai adapter mock. Kegagalan bisa disimulasikan dari UI (checkbox demo) untuk menunjukkan cabang "Pembayaran berhasil? Tidak" di BPMN.
-   - Di backend, panggilan ke gateway (Process Payment, Get Status Pembayaran) ada di Utility Payment Gateway yang dipanggil Task. Entity Payment hanya menyimpan percobaan, status, dan hasil rekonsiliasi, karena Entity tidak boleh memanggil Utility (§1.2). Karena itu trace backend menulis langkah gateway sebagai `Payment Gateway (Utility)`, sedangkan mock frontend menulisnya sebagai `Payment (Entity)`.
+   - Sesuai D2 (slide Klasifikasi Entity dan Utility Service), Process Payment dan Get Status Pembayaran adalah operasi Entity Payment. Payment gateway adalah sistem eksternal (participant di SoaML Billing) yang diakses lewat adapter milik Entity Payment (`entity/payment/adapters/mock.py`), bukan Utility tersendiri.
    - Laporan kas (`GET /laporan-kas`) dirakit read model (`app/views`): transaksi dari Financial Ledger, ringkasan tertunda dari Invoice dan Rent Invoice.
 9. **Pendaftaran penghuni oleh pemilik** menggantikan sign up (§7.2). Ini operasi Entity Tenant and Lease (Add Penghuni + Add Sewa), karena pemilik memang sudah tahu siapa penyewanya saat sewa dimulai. Penghuni lama mendapat sewa baru (perpanjang atau pindah unit) lewat `POST /pemilik/penghuni/{id}/sewa`, tanpa akun baru; periode tidak boleh bertabrakan dengan sewa lain di unit itu (`UNIT_SUDAH_DISEWA`) atau sewa lain milik penghuni itu (`SEWA_BENTROK`).
 
 ## 12. Pertanyaan terbuka untuk kelompok
 
-1. Setujui penyimpangan desain di §2, lalu perbaiki slide D2 yang terkait:
-   - Slide 5, 7, 12, 20: consumer Notifikasi diganti dari Complaint Ticket menjadi HMR (#3), dan `getIdPenerima` dipindah ke Notification (#4).
-   - Slide 6: urutan validasi sewa dipindah sebelum `addKeluhan`, dan `addKeluhan` dijadikan operasi HMR (#1, #2).
-   - Slide 11: tambah status `dibatalkan` dan kategori `lainnya` (#7, #8).
-   - Slide 13: kolom Consumer untuk Notifikasi Status Tiket diganti menjadi HMR.
-   - Slide 40: kolom Task untuk Notifikasi Status Tiket diisi HMR.
-   - Slide 41-43: endpoint disesuaikan dengan §5.
-   - Di luar Complaint Handling, slide 19 dan 32 punya masalah layering yang sama (Utility memanggil Micro, `reconcilePembayaran` di Invoice). Implementasi tidak terdampak, tetapi slide tetap perlu dibetulkan.
-2. Batas lampiran (§5) dan daftar urgensi (`rendah | sedang | tinggi`).
-3. ~~Siapa yang membayar perbaikan?~~ Diputuskan: pemilik (§11b #3). Sisa pekerjaan di slide:
-   - BPMN Billing: participant pembayar Penghuni → Pemilik; invoice terbit setelah "Pemilik menerima hasil", bukan setelah konfirmasi penghuni.
-   - BPMN Repair Verification: tambah gateway "Perlu teknisi?" (tidak → tutup tiket), "Estimasi disetujui? Tidak" kembali ke tinjau (bukan batal), sub-alur biaya tambahan, dan langkah penerimaan pemilik.
-   - SoaML: consumer Layanan Pembayaran = Pemilik; operasi baru Set Penerimaan Pemilik, Add/Set Persetujuan Biaya Tambahan, Buka Ulang Tiket.
-4. Nomor kelompok di cover (4 atau 11) dan sisa template di closing D1.
-5. Tagihan sewa dan bayar sekaligus (§11b #6): tanggal jatuh tempo sewa (sekarang tanggal 10), denda keterlambatan (belum ada), dan apakah tagihan sewa diterbitkan otomatis tiap awal bulan (sekarang manual oleh pemilik).
-6. ~~Perpanjangan sewa untuk penghuni yang emailnya sudah terdaftar?~~ Diputuskan: didukung lewat "Sewa lagi" (§11b #9).
-7. Akses dosen ke demo live: tambahkan Gmail dosen sebagai test user OAuth, atau cukup demo login.
+D2 final (Kelompok 11) sudah dikumpulkan dan dipresentasikan. Hal yang sudah tercermin di D2 final:
+- Penyimpangan desain §2: Task HMR memanggil Notification (slide arsitektur komposisi layanan), BPMN Complaint Handling memvalidasi sewa sebelum tiket dibuat.
+- Pemilik membayar perbaikan: BPMN dan SoaML Billing memakai Pemilik sebagai pembayar, invoice terbit setelah pemilik menerima hasil.
+- BPMN Repair Verification: gateway "Perlu teknisi?", "Disetujui? Tidak" kembali ke tinjau tiket, biaya tambahan, dan penerimaan pemilik.
+- Rent Billing sebagai proses tambahan (slide Tagihan Sewa Bulanan): jatuh tempo tanggal 10, diterbitkan manual oleh pemilik.
+
+Yang masih terbuka:
+1. **Batas lampiran keluhan.** Service contract Layanan Pengajuan Keluhan di D2 menyebut maksimal 5 lampiran, sedangkan UI (slide Lapor Kerusakan) dan backend memakai 3. Salah satunya perlu disamakan.
+2. **Jumlah endpoint.** Slide Dokumentasi API D2 menyebut 35 endpoint dan "backend FastAPI direncanakan". Kontrak sekarang berisi 42 operasi. Tambahan 7 operasinya: `GET /auth/me` (login Google), `GET /pemilik/unit`, `GET/POST /pemilik/penghuni`, `PATCH /pemilik/penghuni/{id}`, `POST /pemilik/penghuni/{id}/sewa` (pendaftaran penghuni dan sewa lagi, §11b #9), dan `POST /dev/reset`. Backend FastAPI juga sudah berjalan. Perlu diperbarui bila ada deliverable berikutnya.
+3. **Denda keterlambatan sewa** belum ada.
+4. **Akses dosen ke demo live:** tambahkan Gmail dosen sebagai test user OAuth, atau cukup demo login.

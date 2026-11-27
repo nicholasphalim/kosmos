@@ -28,7 +28,7 @@ Layanan dirancang dengan pendekatan *Service-Oriented Architecture* (SOA) dan di
 | Task | Handle Maintenance Request, Complete and Settle Maintenance, Rent Billing |
 | Micro | Technician Matching, Cost Estimation, Evidence Verification, Commission Calculation |
 | Entity | Tenant and Lease, Complaint Ticket, Technician, Work Order, Invoice, Rent Invoice, Payment, Financial Ledger |
-| Utility | Notification, Media Storage, AI Classification, Payment Gateway |
+| Utility | Notification, Media Storage, AI Classification |
 
 ## Prototype
 
