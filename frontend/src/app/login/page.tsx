@@ -1,7 +1,7 @@
 "use client";
 
 import { clsx } from "clsx";
-import { ChevronRight, HardHat, House, RotateCcw, X } from "@/components/icons";
+import { ChevronRight, HardHat, House, RotateCcw, Sparkles, X } from "@/components/icons";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState, useSyncExternalStore, type KeyboardEvent } from "react";
@@ -69,6 +69,11 @@ export default function LoginPage() {
   );
   const [galatGoogle, setGalatGoogle] = useState(false);
   const [keGoogle, setKeGoogle] = useState(false);
+  // Bila login Google tersedia, akun demo disembunyikan di balik tombol "Coba demo".
+  const [demoTerbuka, setDemoTerbuka] = useState(false);
+  const tampilDemo = !loginGoogleTersedia || demoTerbuka;
+  // Akun demo hanya ada bila backend berjalan dengan DEMO_MODE; tanpa itu tombol Coba demo tidak tampil.
+  const demoTersedia = akun.isSuccess && akun.data.length > 0;
   // Pesan dari /auth/callback (?galat=...) tampil sampai pengguna mencoba masuk lagi.
   const galat = galatGoogle ? PESAN_GALAT.gagal : kodeGalat && !keGoogle ? (PESAN_GALAT[kodeGalat] ?? PESAN_GALAT.gagal) : null;
 
@@ -134,11 +139,25 @@ export default function LoginPage() {
                 {keGoogle ? "Mengalihkan ke Google…" : "Masuk dengan Google"}
               </button>
               <p className="text-[13px] text-muted">Penghuni baru: minta pemilik kos mendaftarkan email Google kamu terlebih dahulu.</p>
-              <div className="flex items-center gap-3 text-sm font-semibold text-subtle" aria-hidden>
-                <span className="h-px flex-1 bg-line-strong" />
-                atau pakai akun demo
-                <span className="h-px flex-1 bg-line-strong" />
-              </div>
+              {demoTersedia && !demoTerbuka && (
+                <button
+                  type="button"
+                  onClick={() => setDemoTerbuka(true)}
+                  aria-expanded={false}
+                  aria-controls="akun-demo"
+                  className="flex min-h-12 w-full cursor-pointer items-center justify-center gap-2 rounded-2xl bg-lilac-100 px-4 text-sm font-bold text-navy transition-colors duration-200 hover:bg-violet hover:text-white"
+                >
+                  <Sparkles className="size-4" aria-hidden />
+                  Coba demo
+                </button>
+              )}
+              {demoTerbuka && (
+                <div className="flex items-center gap-3 text-sm font-semibold text-subtle" aria-hidden>
+                  <span className="h-px flex-1 bg-line-strong" />
+                  akun demo
+                  <span className="h-px flex-1 bg-line-strong" />
+                </div>
+              )}
             </div>
           )}
           {galat && (
@@ -150,6 +169,8 @@ export default function LoginPage() {
             <h1 className="text-[clamp(2rem,3.5vw,2.75rem)] leading-tight font-bold tracking-[-0.025em]">Masuk sebagai</h1>
           )}
 
+          {tampilDemo && (
+            <div id="akun-demo" className="flex flex-col gap-6">
           <div role="tablist" aria-label="Jenis akun" className="flex gap-8 border-b border-line-strong">
             {TAB.map((t) => {
               const aktif = t.role === tab;
@@ -240,6 +261,8 @@ export default function LoginPage() {
               Reset data demo
             </button>
           </p>
+            </div>
+          )}
         </main>
       </div>
     </div>
