@@ -8,6 +8,7 @@ import { Stiker } from "@/components/ui/Stiker";
 import { useSewaLagi, useTambahPenghuni, useUbahPenghuni, useUnitPemilik } from "@/lib/api/hooks";
 import type { PenghuniTerdaftar, UnitPemilik } from "@/lib/api/types";
 import { rupiah, tanggal } from "@/lib/format";
+import { GALAT_NO_WA, galatNama, galatPeriodeSewa, normalisasiNoWa } from "@/lib/validasi";
 
 const INPUT =
   "h-11 w-full rounded-full border border-line-strong bg-white px-4 text-[15px] focus:border-violet-400 focus:shadow-[0_0_0_4px_#8a6ff029] focus:outline-none disabled:bg-lilac-50 disabled:text-muted";
@@ -32,13 +33,26 @@ function Field({ label, children, petunjuk }: { label: string; children: (id: st
   );
 }
 
-function PesanGalat({ error }: { error: Error | null }) {
-  if (!error) return null;
+/** Galat dari pemeriksaan di browser didahulukan; selain itu galat dari server. */
+function PesanGalat({ error, lokal = null }: { error: Error | null; lokal?: string | null }) {
+  const pesan = lokal ?? error?.message;
+  if (!pesan) return null;
   return (
     <p role="alert" className="rounded-2xl bg-danger-bg px-4 py-3 text-sm font-semibold text-danger">
-      {error.message}
+      {pesan}
     </p>
   );
+}
+
+/** Pemeriksaan cepat sebelum request; aturan sama dengan backend (lib/validasi.ts). */
+function galatData(d: { nama?: string; noWa?: string; mulai?: string; selesai?: string }): string | null {
+  if (d.nama !== undefined) {
+    const g = galatNama(d.nama);
+    if (g) return g;
+  }
+  if (d.noWa !== undefined && !normalisasiNoWa(d.noWa)) return GALAT_NO_WA;
+  if (d.mulai !== undefined && d.selesai !== undefined) return galatPeriodeSewa(d.mulai, d.selesai);
+  return null;
 }
 
 function labelUnit(u: UnitPemilik) {
@@ -97,10 +111,14 @@ export function FormTambahPenghuni({ onSelesai }: { onSelesai: (p: PenghuniTerda
   const [idUnit, setIdUnit] = useState<number | "">("");
   const [mulai, setMulai] = useState(isoLokal());
   const [selesai, setSelesai] = useState(isoLokal(365));
+  const [galatLokal, setGalatLokal] = useState<string | null>(null);
 
   function kirim(e: FormEvent) {
     e.preventDefault();
     if (idUnit === "") return;
+    const galat = galatData({ nama, noWa, mulai, selesai });
+    setGalatLokal(galat);
+    if (galat) return;
     tambah.mutate(
       { nama, email, no_wa: noWa, id_unit: idUnit, tanggal_mulai: mulai, tanggal_selesai: selesai },
       { onSuccess: onSelesai },
@@ -127,7 +145,7 @@ export function FormTambahPenghuni({ onSelesai }: { onSelesai: (p: PenghuniTerda
         <Field label="Unit">{(id) => <PilihUnit id={id} value={idUnit} onChange={setIdUnit} />}</Field>
         <PeriodeSewa mulai={mulai} selesai={selesai} setMulai={setMulai} setSelesai={setSelesai} />
       </div>
-      <PesanGalat error={tambah.error} />
+      <PesanGalat error={tambah.error} lokal={galatLokal} />
       <Button type="submit" loading={tambah.isPending} icon={<CirclePlus className="size-4.5" aria-hidden />} className="self-start">
         Daftarkan penghuni
       </Button>
@@ -140,9 +158,13 @@ function FormUbah({ p, onSelesai }: { p: PenghuniTerdaftar; onSelesai: () => voi
   const [nama, setNama] = useState(p.pengguna.nama);
   const [email, setEmail] = useState(p.email);
   const [noWa, setNoWa] = useState(p.no_wa);
+  const [galatLokal, setGalatLokal] = useState<string | null>(null);
 
   function kirim(e: FormEvent) {
     e.preventDefault();
+    const galat = galatData({ nama: nama !== p.pengguna.nama ? nama : undefined, noWa: noWa !== p.no_wa ? noWa : undefined });
+    setGalatLokal(galat);
+    if (galat) return;
     const body = {
       ...(nama !== p.pengguna.nama && { nama }),
       ...(email !== p.email && { email }),
@@ -163,7 +185,7 @@ function FormUbah({ p, onSelesai }: { p: PenghuniTerdaftar; onSelesai: () => voi
         </Field>
         <Field label="Nomor WhatsApp">{(id) => <input id={id} required minLength={8} value={noWa} onChange={(e) => setNoWa(e.target.value)} className={INPUT} />}</Field>
       </div>
-      <PesanGalat error={ubah.error} />
+      <PesanGalat error={ubah.error} lokal={galatLokal} />
       <div className="flex flex-wrap gap-2">
         <Button type="submit" size="sm" loading={ubah.isPending}>
           Simpan
@@ -182,10 +204,14 @@ function FormSewaLagi({ p, onSelesai }: { p: PenghuniTerdaftar; onSelesai: () =>
   const besok = p.sewa.status_sewa === "aktif" ? p.sewa.tanggal_selesai : isoLokal();
   const [mulai, setMulai] = useState(besok);
   const [selesai, setSelesai] = useState(isoLokal(365));
+  const [galatLokal, setGalatLokal] = useState<string | null>(null);
 
   function kirim(e: FormEvent) {
     e.preventDefault();
     if (idUnit === "") return;
+    const galat = galatData({ mulai, selesai });
+    setGalatLokal(galat);
+    if (galat) return;
     sewa.mutate({ idPengguna: p.pengguna.id, body: { id_unit: idUnit, tanggal_mulai: mulai, tanggal_selesai: selesai } }, { onSuccess: onSelesai });
   }
 
@@ -196,7 +222,7 @@ function FormSewaLagi({ p, onSelesai }: { p: PenghuniTerdaftar; onSelesai: () =>
         <Field label="Unit">{(id) => <PilihUnit id={id} value={idUnit} onChange={setIdUnit} />}</Field>
         <PeriodeSewa mulai={mulai} selesai={selesai} setMulai={setMulai} setSelesai={setSelesai} />
       </div>
-      <PesanGalat error={sewa.error} />
+      <PesanGalat error={sewa.error} lokal={galatLokal} />
       <div className="flex flex-wrap gap-2">
         <Button type="submit" size="sm" loading={sewa.isPending}>
           Buat sewa
