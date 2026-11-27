@@ -4,7 +4,7 @@ import { clsx } from "clsx";
 import { Building, Check, CreditCard, ShieldCheck, TriangleExclamationPoint, Wallet, type IkonKosmos } from "@/components/icons";
 import { useState } from "react";
 import { Button } from "@/components/ui/Button";
-import { useBayarInvoice } from "@/lib/api/hooks";
+import { useAkunDemo, useBayarInvoice } from "@/lib/api/hooks";
 import type { Invoice, MetodePembayaran, Pembayaran } from "@/lib/api/types";
 import { config } from "@/lib/config";
 import { LABEL_METODE, rupiah, waktuLengkap } from "@/lib/format";
@@ -33,6 +33,9 @@ type PropsUmum = {
 export function PanelBayarUmum({ total, lunas, isPending, gagal, error, onBayar, judul = "Bayar tagihan", catatan }: PropsUmum) {
   const [metode, setMetode] = useState<MetodePembayaran>("qris");
   const [simulasiGagal, setSimulasiGagal] = useState(false);
+  // Checkbox demo hanya tampil di mode mock atau bila backend berjalan dengan DEMO_MODE (akun demo tersedia).
+  const akunDemo = useAkunDemo();
+  const modeDemo = config.apiMode === "mock" || akunDemo.isSuccess;
 
   if (lunas) {
     const p = lunas.pembayaran;
@@ -95,7 +98,7 @@ export function PanelBayarUmum({ total, lunas, isPending, gagal, error, onBayar,
         ))}
       </fieldset>
 
-      {config.apiMode === "mock" && (
+      {modeDemo && (
         <label className="flex cursor-pointer items-center gap-2.5 rounded-2xl border border-dashed border-line-strong px-3.5 py-2.5 text-[13px] text-navy-soft">
           <input type="checkbox" checked={simulasiGagal} onChange={(e) => setSimulasiGagal(e.target.checked)} className="size-4 accent-navy" />
           Demo: simulasikan pembayaran gagal di payment gateway
