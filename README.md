@@ -17,6 +17,7 @@ Kosmos dirancang untuk menjawab masalah tersebut dengan mengotomatisasi alur dar
 | **Complaint Handling** | Penghuni mengajukan keluhan beserta foto/video. Sistem memvalidasi sewa aktif, membuat tiket, mengklasifikasi kategori dan urgensi dengan AI, lalu mengabari penghuni dan pemilik lewat WhatsApp. |
 | **Repair Verification** | Sistem mencari teknisi terverifikasi, tersedia, dan terdekat, menghitung estimasi biaya untuk disetujui pemilik, mencatat progres servis, dan memverifikasi foto bukti perbaikan. |
 | **Billing & Commission** | Sistem menghitung komisi, membuat invoice, memproses pembayaran lewat payment gateway, merekonsiliasi transaksi, dan mencatatnya ke laporan kas pemilik. |
+| **Rent Billing** | Pemilik menerbitkan tagihan sewa bulanan untuk semua sewa aktif. Penghuni membayar lewat payment gateway yang sama, dan pembayarannya tercatat sebagai pemasukan di laporan kas. |
 
 ## Arsitektur Layanan
 
@@ -24,14 +25,14 @@ Layanan dirancang dengan pendekatan *Service-Oriented Architecture* (SOA) dan di
 
 | Lapisan | Layanan |
 |---|---|
-| Task | Handle Maintenance Request, Complete and Settle Maintenance |
+| Task | Handle Maintenance Request, Complete and Settle Maintenance, Rent Billing |
 | Micro | Technician Matching, Cost Estimation, Evidence Verification, Commission Calculation |
-| Entity | Tenant and Lease, Complaint Ticket, Technician, Work Order, Invoice, Payment, Financial Ledger |
+| Entity | Tenant and Lease, Complaint Ticket, Technician, Work Order, Invoice, Rent Invoice, Payment, Financial Ledger |
 | Utility | Notification, Media Storage, AI Classification |
 
 ## Prototype
 
-Prototype mengimplementasikan Complaint Handling, Repair Verification, Billing & Commission, dan tagihan sewa bulanan.
+Prototype mengimplementasikan keempat proses di atas. AI Classification, WhatsApp, dan payment gateway memakai adapter mock; kegagalan AI dan pembayaran bisa disimulasikan untuk demo.
 
 | Bagian | Teknologi |
 |---|---|

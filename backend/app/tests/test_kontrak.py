@@ -2,7 +2,6 @@
 
 from pathlib import Path
 
-import pytest
 import yaml
 
 from app.main import API_PREFIX, app
@@ -30,7 +29,6 @@ def test_tidak_ada_rute_di_luar_kontrak():
     assert not lebih, f"Rute backend tidak ada di openapi.yaml: {sorted(lebih)}"
 
 
-@pytest.mark.xfail(reason="Endpoint diimplementasikan bertahap di fase P3-P6", strict=False)
 def test_semua_rute_kontrak_terpasang():
     kurang = _rute_kontrak() - {(m, p) for m, p, _ in _operasi_api()}
     assert not kurang, f"Belum diimplementasikan ({len(kurang)}): {sorted(kurang)}"

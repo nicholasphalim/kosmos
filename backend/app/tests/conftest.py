@@ -90,6 +90,7 @@ def atur_auth(monkeypatch: pytest.MonkeyPatch) -> None:
     from app.core import security
 
     s = get_settings()
+    monkeypatch.setattr(s, "storage_provider", "local")  # test tidak mengunggah ke Supabase Storage
     monkeypatch.setattr(s, "demo_mode", True)
     monkeypatch.setattr(s, "demo_jwt_secret", SecretStr("x" * 48))
     monkeypatch.setattr(s, "supabase_url", SUPABASE_TEST_URL)
@@ -104,6 +105,7 @@ def token_supabase(email: str, sub: uuid.UUID | None = None, **ubah) -> str:
         "sub": str(sub or uuid.uuid4()),
         "email": email,
         "role": "authenticated",
+        "app_metadata": {"provider": "google", "providers": ["google"]},
         "exp": datetime.now(UTC) + timedelta(hours=1),
     } | ubah
     return jwt.encode(payload, _KUNCI_TEST, algorithm="ES256")

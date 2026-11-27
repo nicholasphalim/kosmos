@@ -569,19 +569,21 @@ export const complaintTicket = {
 /* Utility: Media Storage                                                 */
 /* ===================================================================== */
 
-const BATAS = { maksFile: 3, gambar: 5 * 1024 * 1024, video: 20 * 1024 * 1024 };
+const BATAS = { maksFile: 5, gambar: 5 * 1024 * 1024, video: 20 * 1024 * 1024 };
+const TIPE_MEDIA = ["image/jpeg", "image/png", "image/webp", "image/gif", "image/heic", "video/mp4"];
 
 export const mediaStorage = {
   validasi(files: File[]) {
     if (files.length > BATAS.maksFile) {
-      throw new ServiceError(422, "LAMPIRAN_TERLALU_BANYAK", "Maksimal 3 file lampiran.");
+      throw new ServiceError(422, "LAMPIRAN_TERLALU_BANYAK", `Maksimal ${BATAS.maksFile} file lampiran.`);
     }
     for (const f of files) {
+      // Daftar tipe sama dengan EKSTENSI di backend media_storage/service.py.
+      if (!TIPE_MEDIA.includes(f.type)) {
+        throw new ServiceError(422, "TIPE_FILE_DITOLAK", `${f.name}: hanya foto (JPG, PNG, WebP, GIF, HEIC) atau video MP4.`);
+      }
       const gambar = f.type.startsWith("image/");
       const video = f.type === "video/mp4";
-      if (!gambar && !video) {
-        throw new ServiceError(422, "TIPE_FILE_DITOLAK", `${f.name}: hanya gambar atau video mp4.`);
-      }
       if ((gambar && f.size > BATAS.gambar) || (video && f.size > BATAS.video)) {
         throw new ServiceError(422, "FILE_TERLALU_BESAR", `${f.name} melebihi batas ukuran.`);
       }

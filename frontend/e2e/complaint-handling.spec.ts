@@ -1,6 +1,7 @@
 import { execSync } from "node:child_process";
 import { rmSync } from "node:fs";
-import { expect, test, type Page } from "@playwright/test";
+import type { Page } from "@playwright/test";
+import { expect, test } from "./fixtures";
 
 /** Satu konteks browser per tes = localStorage bersih = data seed baru. */
 
@@ -8,6 +9,8 @@ async function masukSebagai(page: Page, nama: string) {
   await page.goto("/login");
   if (nama === "Pak Derren") await page.getByRole("tab", { name: "Pemilik" }).click();
   await page.getByRole("button", { name: new RegExp(nama) }).click();
+  // Tunggu login selesai (sesi tersimpan, pindah ke beranda role) sebelum langkah berikutnya.
+  await expect(page).toHaveURL(/\/(penghuni|pemilik|teknisi)/);
 }
 
 test("Skenario 1: Dea (sewa aktif) melapor, tiket dibuat dan diklasifikasi AI", async ({ page }) => {

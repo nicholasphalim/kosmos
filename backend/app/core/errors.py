@@ -1,9 +1,13 @@
 """Error seragam sesuai kontrak: { "error": { "kode": "...", "pesan": "..." } }."""
 
+import logging
+
 from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 from starlette.exceptions import HTTPException as StarletteHTTPException
+
+log = logging.getLogger("kosmos")
 
 
 class ServiceError(Exception):
@@ -36,3 +40,9 @@ def pasang_error_handler(app: FastAPI) -> None:
     async def _http(_req: Request, e: StarletteHTTPException):
         kode = {401: "TIDAK_TERAUTENTIKASI", 403: "AKSES_DITOLAK", 404: "TIDAK_DITEMUKAN", 405: "METODE_TIDAK_DIDUKUNG"}
         return _error(e.status_code, kode.get(e.status_code, "HTTP_ERROR"), str(e.detail))
+
+    @app.exception_handler(Exception)
+    async def _tak_terduga(req: Request, e: Exception):
+        # Detail (stack trace) hanya di log server, tidak dikirim ke klien.
+        log.exception("Kesalahan tak terduga di %s %s", req.method, req.url.path)
+        return _error(500, "KESALAHAN_SERVER", "Terjadi kesalahan di server. Coba lagi.")

@@ -176,6 +176,18 @@ def _sewa_aktif_unit(db: Session, id_unit: int) -> Sewa | None:
     return db.scalars(q).first()
 
 
+def get_sewa(db: Session, id_sewa: int) -> Sewa:
+    sw = db.get(Sewa, id_sewa)
+    if sw is None:
+        raise ServiceError(404, "SEWA_TIDAK_ADA", "Sewa tidak ditemukan.")
+    return sw
+
+
+def get_sewa_aktif(db: Session, id_pemilik: int) -> list[Sewa]:
+    """Get Sewa Aktif: sewa yang aktif hari ini (WIB) di unit-unit milik pemilik, urut unit."""
+    return [sw for u in unit_milik(db, id_pemilik) if (sw := _sewa_aktif_unit(db, u.id)) is not None]
+
+
 def list_unit_pemilik(db: Session, id_pemilik: int) -> list[UnitPemilik]:
     hasil = []
     for u in unit_milik(db, id_pemilik):

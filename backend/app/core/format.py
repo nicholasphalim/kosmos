@@ -1,6 +1,8 @@
 """Format teks Indonesia untuk isi notifikasi, sama dengan frontend/src/lib/format.ts."""
 
-from datetime import date
+from datetime import date, datetime
+
+from app.core.waktu import WIB
 
 BULAN = ["Jan", "Feb", "Mar", "Apr", "Mei", "Jun", "Jul", "Agu", "Sep", "Okt", "Nov", "Des"]
 LABEL_KATEGORI = {"AC": "AC", "listrik": "Listrik", "air": "Air", "lainnya": "Lainnya"}
@@ -15,3 +17,34 @@ def rupiah(n: int) -> str:
 def tanggal(d: date) -> str:
     """12 Nov 2026."""
     return f"{d.day} {BULAN[d.month - 1]} {d.year}"
+
+
+HARI = ["Sen", "Sel", "Rab", "Kam", "Jum", "Sab", "Min"]
+
+
+def jadwal(dt: datetime) -> str:
+    """Rab, 25 Nov, 10.00 (WIB)."""
+    d = dt.astimezone(WIB)
+    return f"{HARI[d.weekday()]}, {d.day} {BULAN[d.month - 1]}, {d:%H.%M}"
+
+
+BULAN_PANJANG = [
+    "Januari",
+    "Februari",
+    "Maret",
+    "April",
+    "Mei",
+    "Juni",
+    "Juli",
+    "Agustus",
+    "September",
+    "Oktober",
+    "November",
+    "Desember",
+]
+
+
+def label_periode(periode: str) -> str:
+    """'2026-11' -> 'November 2026'."""
+    tahun, bulan = periode.split("-")
+    return f"{BULAN_PANJANG[int(bulan) - 1]} {tahun}"

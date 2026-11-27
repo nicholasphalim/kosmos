@@ -105,9 +105,15 @@ def _pengguna_dari_token_supabase(token: str, db) -> Pengguna:
         )
         auth_user_id = uuid.UUID(payload["sub"])
         email = payload["email"]
-    except (jwt.PyJWTError, KeyError, ValueError, TypeError):
+        meta = payload.get("app_metadata") or {}
+        provider = meta.get("providers") or [meta.get("provider")]
+    except (jwt.PyJWTError, KeyError, ValueError, TypeError, AttributeError):
         raise _tidak_terautentikasi() from None
     if not isinstance(email, str) or not email:
+        raise _tidak_terautentikasi()
+    # Hanya login Google: email dari Google sudah terverifikasi. Tanpa cek ini, akun email/password Supabase
+    # (bila provider itu aktif) dengan email penghuni yang belum login bisa mengambil alih akun penghuni itu.
+    if not isinstance(provider, list) or "google" not in provider:
         raise _tidak_terautentikasi()
     p = tenant_lease.cari_untuk_login_google(db, auth_user_id, email)
     if p is None:

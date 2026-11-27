@@ -5,16 +5,22 @@ import { useEffect, useId, useMemo } from "react";
 import { ukuranFile } from "@/lib/format";
 
 export const BATAS_LAMPIRAN = {
-  maksFile: 3,
+  maksFile: 5,
   gambarByte: 5 * 1024 * 1024,
   videoByte: 20 * 1024 * 1024,
 } as const;
 
+/** Sama dengan EKSTENSI di backend media_storage/service.py. */
+export const TIPE_FOTO = ["image/jpeg", "image/png", "image/webp", "image/gif", "image/heic"];
+const TIPE_MEDIA = [...TIPE_FOTO, "video/mp4"];
+/** Foto bukti perbaikan: format yang lolos Evidence Verification (slide D2 "Berformat gambar (JPG, PNG, WebP)"). */
+export const TIPE_BUKTI = ["image/jpeg", "image/png", "image/webp"];
+
 /** Validasi sisi klien (kenyamanan). Backend tetap memvalidasi ulang (422). */
 export function validasiFile(file: File): string | null {
+  if (!TIPE_MEDIA.includes(file.type)) return `${file.name}: hanya foto (JPG, PNG, WebP, GIF, HEIC) atau video MP4.`;
   const gambar = file.type.startsWith("image/");
   const video = file.type === "video/mp4";
-  if (!gambar && !video) return `${file.name}: hanya foto atau video mp4.`;
   if (gambar && file.size > BATAS_LAMPIRAN.gambarByte) return `${file.name}: foto maksimal 5 MB.`;
   if (video && file.size > BATAS_LAMPIRAN.videoByte) return `${file.name}: video maksimal 20 MB.`;
   return null;
@@ -106,7 +112,7 @@ export function MediaPicker({ files, onChange, onError, disabled }: Props) {
             <input
               id={inputId}
               type="file"
-              accept="image/*,video/mp4"
+              accept={TIPE_MEDIA.join(",")}
               multiple
               className="sr-only"
               onChange={(e) => {

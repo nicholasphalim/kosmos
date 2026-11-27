@@ -1,8 +1,10 @@
-import { expect, test, type Page } from "@playwright/test";
+import type { Page } from "@playwright/test";
+import { expect, test } from "./fixtures";
 
 /**
- * Repair Verification + Billing & Commission di mode mock.
- * Satu konteks browser per tes = localStorage bersih = data seed baru.
+ * Repair Verification + Billing & Commission.
+ * Mode mock: satu konteks browser per tes = localStorage bersih = data seed baru.
+ * Mode live: database backend di-reset sebelum setiap tes (e2e/fixtures.ts).
  */
 
 const TAB_ROLE: Record<string, string> = { "Pak Derren": "Pemilik", "Pak Slamet": "Teknisi" };

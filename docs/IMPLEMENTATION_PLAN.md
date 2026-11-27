@@ -10,7 +10,7 @@ Deadline: minggu ke-2/3 Desember 2026.
 
 Status (25 Nov 2026):
 - Frontend keempat proses selesai dan berjalan penuh di mode mock (19 skenario E2E).
-- Backend dibangun ulang di branch `backend-v2`: PostgreSQL di Supabase, login Google lewat Supabase Auth. P0–P2 selesai dan sudah masuk `main` (PR #4); P3 (auth + pendaftaran penghuni) sedang berjalan, lihat §7.8.
+- Backend dibangun ulang di branch `backend-v2`: PostgreSQL di Supabase, login Google lewat Supabase Auth. P0–P6 selesai (P0–P3 sudah masuk `main` lewat PR #4, #5): semua endpoint di kontrak sudah diimplementasikan. P7 (hardening) sedang berjalan, lihat §7.8.
 - Backend versi pertama (SQLite, alur lama) diarsipkan di branch `backend-b0` sebagai referensi.
 
 ---
@@ -273,7 +273,7 @@ Tiket awal:
 - TKT-0054 dan 0057: diklasifikasi, menunggu ditinjau pemilik.
 - TKT-0056: dibuat, belum diklasifikasi (AI gagal).
 
-Semua tanggal dihitung relatif terhadap waktu seed.
+Semua tanggal dihitung relatif terhadap waktu seed. Seed backend (`backend/app/seed.py`) sudah memuat tiket, keluhan, riwayat, notifikasi, estimasi, work order, log servis, bukti, invoice, riwayat pembayaran, laporan kas, dan tagihan sewa tiga bulan terakhir (bulan dihitung dalam WIB).
 
 ---
 
@@ -319,7 +319,7 @@ Aturan umum:
 - **Kode status:** 401 untuk token tidak ada, salah, atau kedaluwarsa. 403 untuk role salah atau email Google yang belum terdaftar (`EMAIL_BELUM_TERDAFTAR`). 404 untuk data yang tidak ada atau bukan miliknya. 409 untuk transisi status ilegal dan data bentrok. 422 untuk validasi gagal.
 - **Otorisasi data:** daftar otomatis difilter. Penghuni hanya melihat tiket dan tagihan sewa miliknya. Pemilik hanya melihat data dari properti miliknya. Teknisi hanya melihat work order yang ditugaskan kepadanya.
 - **Privasi:** skema `Pengguna` yang muncul di tiket, work order, dan invoice tidak memuat email atau nomor WhatsApp. Email hanya muncul di `/auth/me` (milik sendiri) dan daftar penghuni milik pemilik.
-- **Batas lampiran (generik, belum ada di D1, konfirmasi ke kelompok):** maksimal 3 file. Gambar jpg/png/webp maksimal 5 MB. Video mp4 maksimal 20 MB. Hanya gambar yang dihitung untuk AI.
+- **Batas lampiran:** maksimal 5 file (service contract Layanan Pengajuan Keluhan di D2). Gambar jpg/png/webp maksimal 5 MB. Video mp4 maksimal 20 MB. Hanya gambar yang dihitung untuk AI.
 
 ---
 
@@ -443,7 +443,7 @@ Urgensi: `korslet|percikan|memercik|api|banjir|gosong|asap|setrum` → tinggi; `
 
 ### 6.6 Alur satu klik, dari UI sampai DB (mode live)
 
-1. Penghuni menekan **Kirim laporan**. React Hook Form menjalankan skema Zod (deskripsi minimal 10 karakter, maksimal 3 file, cek ukuran dan tipe file).
+1. Penghuni menekan **Kirim laporan**. React Hook Form menjalankan skema Zod (deskripsi minimal 10 karakter, maksimal 5 file, cek ukuran dan tipe file).
 2. `useAjukanKeluhan` (useMutation) membangun `FormData` dan memanggil `api.POST("/hmr/keluhan")`. Client menambahkan header `Authorization: Bearer <jwt>`.
 3. FastAPI mencocokkan router HMR. Dependency `current_user` memverifikasi JWT dan mencari pengguna. Jika gagal, response 401 atau 403. Jika role bukan penghuni, response 403.
 4. FastAPI memvalidasi form multipart. Jika tidak valid, response 422.
@@ -496,6 +496,9 @@ Urgensi: `korslet|percikan|memercik|api|banjir|gosong|asap|setrum` → tinggi; `
 **Keputusan keamanan:**
 - Pesan error login tidak membedakan "email tidak ada" dan "sudah terhubung ke akun Google lain", supaya daftar email tidak bisa ditebak.
 - Email hanya bisa dikoreksi selama penghuni belum pernah login Google (`409 SUDAH_TERHUBUNG`).
+- Token Supabase hanya diterima bila login lewat Google (`app_metadata.providers` memuat `google`). Email dari Google sudah terverifikasi; tanpa cek ini, akun email/password Supabase dengan email penghuni yang belum pernah login bisa mengambil alih akun itu.
+- Upload hanya menerima JPG, PNG, WebP, GIF, HEIC, dan MP4, dan ekstensi file disimpan menurut tipe itu (bukan nama file dari klien), supaya SVG atau HTML berisi script tidak bisa disajikan. File yang melebihi batas ditolak sebelum dibaca ke memori.
+- Error tak terduga dibalas `500 KESALAHAN_SERVER` tanpa detail; stack trace hanya di log server.
 - Frontend menyimpan sesi Supabase dengan mekanisme bawaan `supabase-js` (localStorage). Cukup untuk prototype. Cookie `httpOnly` dicatat sebagai pengembangan berikutnya.
 
 ### 7.3 Struktur folder
@@ -518,15 +521,16 @@ backend/
    ├─ seed.py                          ← data demo (§4.1)
    ├─ views/                           ← read model: merakit DTO lintas entity untuk response
    ├─ services/
-   │  ├─ task/       hmr/, csm/, rent_billing/
+   │  ├─ task/       hmr/ (+ tabel estimasi), csm/, rent_billing/,
+   │  │              kabar.py (isi pesan WA perbaikan, invoice, dan tagihan sewa; dipakai HMR, CSM, Rent Billing)
    │  ├─ micro/      technician_matching.py, cost_estimation.py,
-   │  │              evidence_verification.py, commission_calculation.py
+   │  │              evidence_verification.py, commission_calculation.py,
+   │  │              pembulatan.py (pembulatan setengah ke atas seperti Math.round)
    │  ├─ entity/     tenant_lease/, complaint_ticket/, technician/, work_order/,
-   │  │              invoice/, rent_invoice/, payment/, financial_ledger/
+   │  │              invoice/, rent_invoice/, payment/ (adapters/mock.py: payment gateway), financial_ledger/
    │  └─ utility/    media_storage/   (adapters/local.py, adapters/supabase.py)
    │                 ai_classification/ (adapters/mock.py, adapters/llm.py)
    │                 notification/    (adapters/mock.py)
-   │                 payment_gateway/ (adapters/mock.py)
    └─ tests/
 ```
 
@@ -595,7 +599,7 @@ Setiap fase dikerjakan di branch `backend-v2` dan masuk ke `main` lewat satu pul
 | **P4 Complaint Handling** | HMR keluhan, status, klasifikasi ulang, buka ulang. Tenant and Lease, Complaint Ticket. Media Storage (Supabase), AI Classification, Notification | E2E live skenario 1–4 | 2–4 Des |
 | **P5 Repair Verification** | Estimasi, persetujuan, jadwal, biaya tambahan, log, bukti, konfirmasi, terima. Technician, Work Order, empat Micro | E2E live skenario 5, 5b, 5c, 6, 8, 8b | 5–7 Des |
 | **P6 Billing + Rent Billing** | Invoice, bayar, bayar sekaligus, tagihan sewa, Payment, Financial Ledger, payment gateway mock | E2E live skenario 7, 9, 10, 11 | 8–9 Des |
-| **P7 Hardening** | Review keamanan, README, naskah demo, screenshot Swagger untuk slide 41–43, QR | Semua E2E live hijau, gladi demo 2× tanpa error | 10–12 Des |
+| **P7 Hardening** | Review keamanan, README, naskah demo, penyelarasan dengan D2 final, keputusan production | Semua E2E live hijau, gladi demo 2× tanpa error | 10–12 Des |
 
 ### 7.9 Persiapan akun (P1)
 
@@ -616,7 +620,7 @@ Setiap fase dikerjakan di branch `backend-v2` dan masuk ke `main` lewat satu pul
 | Level | Yang diuji | Perintah |
 |---|---|---|
 | Frontend E2E (mode mock) | 22 skenario: skenario demo, kelola penghuni, validasi form, guard role, reset lewat tombol dan terminal | `npm run test:e2e` (di `frontend/`, setelah build mode mock: `NEXT_PUBLIC_API_MODE=mock npm run build`) |
-| Frontend E2E (mode live) | Skenario yang sama terhadap FastAPI sungguhan, ditambah per fase (P4–P6) | `npm run test:e2e:live` |
+| Frontend E2E (mode live) | Complaint Handling (skenario 1–4, validasi, guard, reset lewat tombol dan terminal) dan Repair Verification (skenario 5–8b, guard teknisi), Billing dan Rent Billing (skenario 7, 9, 10, 11), serta kelola penghuni (skenario 12, email terdaftar, sewa lagi) terhadap FastAPI sungguhan. Database `kosmos-dev` di-reset sebelum setiap tes | `npm run test:e2e:live` |
 | Backend unit | Micro, state machine tiket dan work order, status sewa, pembulatan | `uv run pytest` (di `backend/`) |
 | Backend integrasi | Setiap endpoint: kasus berhasil, 401, 403, 404, 409, 422 | termasuk di `uv run pytest` |
 | Auth | Token Supabase palsu ditandatangani kunci test (JWKS di-mock), token kedaluwarsa, `aud`/`iss` salah, email belum terdaftar, login pertama mengisi `auth_user_id`, token demo ditolak bila `DEMO_MODE=false` | termasuk di `uv run pytest` |
@@ -646,7 +650,7 @@ Rencana cadangan demo: frontend mode mock (`npm run dev` di `frontend/`) tetap b
 
 Catatan demo: dengan `DEMO_MODE=true`, siapa pun yang tahu URL bisa masuk sebagai persona demo dan me-reset data. Ini diterima untuk demo kelas. Untuk pemakaian sungguhan, `DEMO_MODE=false`.
 
-QR code untuk slide 44 mengarah ke URL frontend yang di-deploy.
+D2 final (sudah dikumpulkan) memuat QR ke repository GitHub di slide 41.
 
 ---
 
@@ -657,14 +661,14 @@ QR code untuk slide 44 mengarah ke URL frontend yang di-deploy.
 | 0. Fondasi | 13–15 Nov | Keputusan §2, `openapi.yaml`, scaffold Next.js + MSW | Selesai |
 | 1. Frontend Complaint Handling | 16–22 Nov | Login demo, form keluhan, dashboard penghuni dan pemilik, outbox WA | Selesai |
 | 2. Frontend Repair Verification, Billing, Rent Billing | 23–24 Nov | Halaman teknisi, tinjau tiket, estimasi, biaya tambahan, work order, invoice, bayar sekaligus, tagihan sewa, laporan kas, landing page | Selesai |
-| 3. Backend | 25 Nov–9 Des | Fase P0–P6 di §7.8 | P0–P2 selesai, P3 berjalan |
+| 3. Backend | 25 Nov–9 Des | Fase P0–P6 di §7.8 | Selesai |
 | 4. Buffer | 10–14 Des | P7: bug fix, naskah demo, screenshot Swagger, QR | Belum |
 
 ---
 
 ## 11. Skenario demo
 
-Semua skenario berjalan di mode mock. Mode live menyusul per fase (§7.8).
+Semua skenario berjalan di mode mock dan mode live (diuji E2E di keduanya).
 
 1. **Dea** (sewa aktif) mengirim "AC kamar tidak dingin dan menetes air" + foto. Hasil: tiket `diklasifikasi`, kategori AC, urgensi sedang. Outbox WA berisi pesan ke Dea dan Pak Derren.
 2. **Qiqa** (sewa berakhir) mengirim keluhan. Hasil: ditolak dengan alasan sewa tidak aktif, dan tidak ada tiket yang dibuat.
@@ -709,24 +713,20 @@ Keputusan desain yang perlu disepakati kelompok:
    - **Bayar sekaligus**: pemilik membayar beberapa invoice perbaikan dalam satu transaksi gateway (satu `ref_gateway`, satu baris Payment per invoice). All-or-nothing: kalau gateway menolak, tidak ada invoice yang lunas.
 7. Evidence Verification versi mock memeriksa metadata (dua foto, format gambar, tidak identik, ukuran ≥ 1 KB). Versi akhir bisa memakai LLM vision seperti AI Classification.
 8. Payment gateway memakai adapter mock. Kegagalan bisa disimulasikan dari UI (checkbox demo) untuk menunjukkan cabang "Pembayaran berhasil? Tidak" di BPMN.
+   - Sesuai D2 (slide Klasifikasi Entity dan Utility Service), Process Payment dan Get Status Pembayaran adalah operasi Entity Payment. Payment gateway adalah sistem eksternal (participant di SoaML Billing) yang diakses lewat adapter milik Entity Payment (`entity/payment/adapters/mock.py`), bukan Utility tersendiri.
+   - Laporan kas (`GET /laporan-kas`) dirakit read model (`app/views`): transaksi dari Financial Ledger, ringkasan tertunda dari Invoice dan Rent Invoice.
 9. **Pendaftaran penghuni oleh pemilik** menggantikan sign up (§7.2). Ini operasi Entity Tenant and Lease (Add Penghuni + Add Sewa), karena pemilik memang sudah tahu siapa penyewanya saat sewa dimulai. Penghuni lama mendapat sewa baru (perpanjang atau pindah unit) lewat `POST /pemilik/penghuni/{id}/sewa`, tanpa akun baru; periode tidak boleh bertabrakan dengan sewa lain di unit itu (`UNIT_SUDAH_DISEWA`) atau sewa lain milik penghuni itu (`SEWA_BENTROK`).
 
 ## 12. Pertanyaan terbuka untuk kelompok
 
-1. Setujui penyimpangan desain di §2, lalu perbaiki slide D2 yang terkait:
-   - Slide 5, 7, 12, 20: consumer Notifikasi diganti dari Complaint Ticket menjadi HMR (#3), dan `getIdPenerima` dipindah ke Notification (#4).
-   - Slide 6: urutan validasi sewa dipindah sebelum `addKeluhan`, dan `addKeluhan` dijadikan operasi HMR (#1, #2).
-   - Slide 11: tambah status `dibatalkan` dan kategori `lainnya` (#7, #8).
-   - Slide 13: kolom Consumer untuk Notifikasi Status Tiket diganti menjadi HMR.
-   - Slide 40: kolom Task untuk Notifikasi Status Tiket diisi HMR.
-   - Slide 41-43: endpoint disesuaikan dengan §5.
-   - Di luar Complaint Handling, slide 19 dan 32 punya masalah layering yang sama (Utility memanggil Micro, `reconcilePembayaran` di Invoice). Implementasi tidak terdampak, tetapi slide tetap perlu dibetulkan.
-2. Batas lampiran (§5) dan daftar urgensi (`rendah | sedang | tinggi`).
-3. ~~Siapa yang membayar perbaikan?~~ Diputuskan: pemilik (§11b #3). Sisa pekerjaan di slide:
-   - BPMN Billing: participant pembayar Penghuni → Pemilik; invoice terbit setelah "Pemilik menerima hasil", bukan setelah konfirmasi penghuni.
-   - BPMN Repair Verification: tambah gateway "Perlu teknisi?" (tidak → tutup tiket), "Estimasi disetujui? Tidak" kembali ke tinjau (bukan batal), sub-alur biaya tambahan, dan langkah penerimaan pemilik.
-   - SoaML: consumer Layanan Pembayaran = Pemilik; operasi baru Set Penerimaan Pemilik, Add/Set Persetujuan Biaya Tambahan, Buka Ulang Tiket.
-4. Nomor kelompok di cover (4 atau 11) dan sisa template di closing D1.
-5. Tagihan sewa dan bayar sekaligus (§11b #6): tanggal jatuh tempo sewa (sekarang tanggal 10), denda keterlambatan (belum ada), dan apakah tagihan sewa diterbitkan otomatis tiap awal bulan (sekarang manual oleh pemilik).
-6. ~~Perpanjangan sewa untuk penghuni yang emailnya sudah terdaftar?~~ Diputuskan: didukung lewat "Sewa lagi" (§11b #9).
-7. Akses dosen ke demo live: tambahkan Gmail dosen sebagai test user OAuth, atau cukup demo login.
+D2 final (Kelompok 11) sudah dikumpulkan dan dipresentasikan. Hal yang sudah tercermin di D2 final:
+- Penyimpangan desain §2: Task HMR memanggil Notification (slide arsitektur komposisi layanan), BPMN Complaint Handling memvalidasi sewa sebelum tiket dibuat.
+- Pemilik membayar perbaikan: BPMN dan SoaML Billing memakai Pemilik sebagai pembayar, invoice terbit setelah pemilik menerima hasil.
+- BPMN Repair Verification: gateway "Perlu teknisi?", "Disetujui? Tidak" kembali ke tinjau tiket, biaya tambahan, dan penerimaan pemilik.
+- Batas lampiran keluhan 5 file, sesuai service contract Layanan Pengajuan Keluhan (UI dan backend sebelumnya memakai 3).
+- Rent Billing sebagai proses tambahan (slide Tagihan Sewa Bulanan): jatuh tempo tanggal 10, diterbitkan manual oleh pemilik.
+
+Yang masih terbuka:
+1. **Jumlah endpoint.** Slide Dokumentasi API D2 menyebut 35 endpoint dan "backend FastAPI direncanakan". Kontrak sekarang berisi 42 operasi. Tambahan 7 operasinya: `GET /auth/me` (login Google), `GET /pemilik/unit`, `GET/POST /pemilik/penghuni`, `PATCH /pemilik/penghuni/{id}`, `POST /pemilik/penghuni/{id}/sewa` (pendaftaran penghuni dan sewa lagi, §11b #9), dan `POST /dev/reset`. Backend FastAPI juga sudah berjalan. Perlu diperbarui bila ada deliverable berikutnya.
+2. **Denda keterlambatan sewa** belum ada.
+3. **Akses dosen ke demo live:** tambahkan Gmail dosen sebagai test user OAuth, atau cukup demo login.
