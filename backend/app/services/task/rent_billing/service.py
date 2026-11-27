@@ -12,12 +12,11 @@ from app.core.trace import Tracer
 from app.core.waktu import now_utc
 from app.services.entity.financial_ledger import service as ledger
 from app.services.entity.payment import service as payment
+from app.services.entity.payment.service import LABEL_METODE
 from app.services.entity.rent_invoice import service as rent_invoice
 from app.services.entity.tenant_lease import service as tenant_lease
 from app.services.entity.tenant_lease.models import Pengguna
 from app.services.task.kabar import kabari_sewa
-from app.services.utility.payment_gateway import service as payment_gateway
-from app.services.utility.payment_gateway.service import LABEL_METODE
 from app.views.schemas import BayarSewaResponse, TerbitkanSewaResponse
 
 
@@ -52,7 +51,7 @@ def terbitkan(db: Session, user: Pengguna) -> TerbitkanSewaResponse:
 
 def bayar(db: Session, user: Pengguna, id_tagihan: int, metode: str, simulasi_gagal: bool) -> BayarSewaResponse:
     """Penghuni membayar sewa: gateway -> status -> rekonsiliasi -> lunas -> pemasukan di laporan kas pemilik."""
-    payment_gateway.validasi_metode(metode)
+    payment.validasi_metode(metode)
     kode = rent_invoice.kode_tagihan_sewa(id_tagihan)
     tr = Tracer()
     with tr.step("Rent Billing", "Task", f"bayarTagihanSewa({kode}, {metode})"):
@@ -64,10 +63,12 @@ def bayar(db: Session, user: Pengguna, id_tagihan: int, metode: str, simulasi_ga
         raise ServiceError(409, "SUDAH_LUNAS", "Tagihan sewa ini sudah lunas.")
 
     with tr.step("Payment", "Entity", f"setMetodePembayaran({LABEL_METODE[metode]})"):
-        p = payment.set_metode(db, "sewa", t.id, metode, t.jumlah, payment_gateway.ref_baru())
-    with tr.step("Payment Gateway", "Utility", "processPayment via payment gateway (mock)") as s:
-        hasil = payment_gateway.proses(p.ref_gateway, metode, t.jumlah, simulasi_gagal)
+        p = payment.set_metode(db, "sewa", t.id, metode, t.jumlah, payment.ref_baru())
+    with tr.step("Payment", "Entity", "processPayment via payment gateway (mock)") as s:
+        hasil = payment.process_payment(p.ref_gateway, metode, t.jumlah, simulasi_gagal)
         s.operasi += f" → {hasil.status}"
+    with tr.step("Payment", "Entity", f"getStatusPembayaran → {payment.get_status(hasil)}"):
+        pass
     with tr.step("Payment", "Entity", f"setStatusPembayaran({hasil.status})"):
         payment.set_status(db, p, hasil.status, hasil.alasan)
 

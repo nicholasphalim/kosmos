@@ -1,5 +1,5 @@
 """Billing dan Rent Billing (plan §11b #3, #6, #8; skenario demo 7, 9, 10, 11): CSM, Rent Billing, Payment,
-Financial Ledger, Rent Invoice, Payment Gateway."""
+Financial Ledger, Rent Invoice."""
 
 from app.core.format import label_periode
 from app.services.entity.rent_invoice.service import periode_dari
@@ -44,7 +44,7 @@ def test_skenario_7_bayar_gagal_lalu_berhasil(api):
     assert [p["status"] for p in body["invoice"]["pembayaran"]] == ["gagal", "berhasil"]
     assert body["pembayaran"]["direkonsiliasi"] is True and body["pembayaran"]["ref_gateway"].startswith("PG-")
     layanan = [(s["service"], s["layer"]) for s in body["trace"]]
-    assert ("Payment Gateway", "Utility") in layanan and ("Financial Ledger", "Entity") in layanan
+    assert ("Payment", "Entity") in layanan and ("Financial Ledger", "Entity") in layanan
 
     kas = _kas(api)
     baru = [k for k in kas["transaksi"] if k["ref"] == "INV-0003"]

@@ -8,6 +8,8 @@ from dataclasses import dataclass
 
 from .pembulatan import bulat
 
+FORMAT_FOTO = ("image/jpeg", "image/png", "image/webp")
+
 
 @dataclass(frozen=True)
 class Foto:
@@ -26,7 +28,7 @@ def verifikasi_bukti(sebelum: Foto | None, sesudah: Foto | None) -> dict:
         {"label": "Foto sebelum dan sesudah lengkap", "ok": len(dua) == 2},
         {
             "label": "Berformat gambar (JPG, PNG, WebP)",
-            "ok": bool(dua) and all(f.mime.startswith("image/") for f in dua),
+            "ok": bool(dua) and all(f.mime in FORMAT_FOTO for f in dua),
         },
         {"label": "Bukan foto yang sama", "ok": not sama},
         {"label": "Ukuran foto wajar (≥ 1 KB)", "ok": bool(dua) and all(f.ukuran_byte >= 1024 for f in dua)},

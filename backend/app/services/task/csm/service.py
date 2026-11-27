@@ -2,7 +2,7 @@
 
 Log servis, biaya tambahan, bukti + Evidence Verification, konfirmasi penghuni, penerimaan pemilik
 (Get Biaya Final, Calculate Komisi, Add Invoice), lalu pembayaran invoice oleh pemilik (satu per satu atau
-sekaligus) lewat Payment Gateway, rekonsiliasi, dan pencatatan ke laporan kas.
+sekaligus) lewat Entity Payment, rekonsiliasi, dan pencatatan ke laporan kas.
 Urutan langkah dan teks `operasi` di trace mengikuti objek `csm` di frontend/src/mocks/services.ts.
 """
 
@@ -20,6 +20,7 @@ from app.services.entity.financial_ledger import service as ledger
 from app.services.entity.invoice import service as invoice
 from app.services.entity.invoice.models import Invoice
 from app.services.entity.payment import service as payment
+from app.services.entity.payment.service import LABEL_METODE
 from app.services.entity.tenant_lease import service as tenant_lease
 from app.services.entity.tenant_lease.models import Pengguna
 from app.services.entity.work_order import service as work_order
@@ -29,8 +30,6 @@ from app.services.task.hmr.models import Estimasi
 from app.services.task.kabar import kabari_perbaikan, kabari_tagihan
 from app.services.utility.media_storage import service as media_storage
 from app.services.utility.media_storage.service import FileMasuk
-from app.services.utility.payment_gateway import service as payment_gateway
-from app.services.utility.payment_gateway.service import LABEL_METODE
 from app.views.schemas import BayarResponse, BayarSekaligusResponse, BuktiResponse, KonfirmasiResponse
 from app.views.schemas import WorkOrder as WorkOrderOut
 
@@ -278,7 +277,7 @@ def _catat_kas_perbaikan(db: Session, inv: Invoice, waktu: datetime) -> None:
 
 def bayar(db: Session, user: Pengguna, id_invoice: int, metode: str, simulasi_gagal: bool) -> BayarResponse:
     """Pemilik membayar satu invoice: metode -> gateway -> status -> rekonsiliasi -> lunas -> laporan kas."""
-    payment_gateway.validasi_metode(metode)
+    payment.validasi_metode(metode)
     tr = Tracer()
     with tr.step(
         "Complete and Settle Maintenance", "Task", f"bayarInvoice({invoice.kode_invoice(id_invoice)}, {metode})"
@@ -291,11 +290,11 @@ def bayar(db: Session, user: Pengguna, id_invoice: int, metode: str, simulasi_ga
         raise ServiceError(409, "SUDAH_LUNAS", "Invoice ini sudah lunas.")
 
     with tr.step("Payment", "Entity", f"setMetodePembayaran({LABEL_METODE[metode]})"):
-        p = payment.set_metode(db, "invoice", inv.id, metode, inv.total, payment_gateway.ref_baru())
-    with tr.step("Payment Gateway", "Utility", "processPayment via payment gateway (mock)") as s:
-        hasil = payment_gateway.proses(p.ref_gateway, metode, inv.total, simulasi_gagal)
+        p = payment.set_metode(db, "invoice", inv.id, metode, inv.total, payment.ref_baru())
+    with tr.step("Payment", "Entity", "processPayment via payment gateway (mock)") as s:
+        hasil = payment.process_payment(p.ref_gateway, metode, inv.total, simulasi_gagal)
         s.operasi += f" → {hasil.status}"
-    with tr.step("Payment Gateway", "Utility", f"getStatusPembayaran → {hasil.status_gateway}"):
+    with tr.step("Payment", "Entity", f"getStatusPembayaran → {payment.get_status(hasil)}"):
         pass
     with tr.step("Payment", "Entity", f"setStatusPembayaran({hasil.status})"):
         payment.set_status(db, p, hasil.status, hasil.alasan)
@@ -343,7 +342,7 @@ def bayar_sekaligus(
 
     All-or-nothing: gagal di gateway berarti tidak ada invoice yang lunas.
     """
-    payment_gateway.validasi_metode(metode)
+    payment.validasi_metode(metode)
     unik = list(dict.fromkeys(ids))
     if not 1 <= len(unik) <= MAKS_BAYAR_SEKALIGUS:
         raise ServiceError(422, "JUMLAH_INVOICE_TIDAK_VALID", f"Pilih 1 sampai {MAKS_BAYAR_SEKALIGUS} invoice.")
@@ -358,11 +357,11 @@ def bayar_sekaligus(
     if lunas:
         raise ServiceError(409, "SUDAH_LUNAS", f"{invoice.kode_invoice(lunas.id)} sudah lunas.")
 
-    ref = payment_gateway.ref_baru()
+    ref = payment.ref_baru()
     with tr.step("Payment", "Entity", f"setMetodePembayaran({LABEL_METODE[metode]}) × {len(daftar)}, ref {ref}"):
         rows = [payment.set_metode(db, "invoice", i.id, metode, i.total, ref) for i in daftar]
-    with tr.step("Payment Gateway", "Utility", f"processPayment {rupiah(total)} via payment gateway (mock)") as s:
-        hasil = payment_gateway.proses(ref, metode, total, simulasi_gagal)
+    with tr.step("Payment", "Entity", f"processPayment {rupiah(total)} via payment gateway (mock)") as s:
+        hasil = payment.process_payment(ref, metode, total, simulasi_gagal)
         s.operasi += f" → {hasil.status}"
     with tr.step("Payment", "Entity", f"setStatusPembayaran({hasil.status}) × {len(rows)}"):
         for r in rows:

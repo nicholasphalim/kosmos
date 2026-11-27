@@ -21,7 +21,9 @@ from app.core.waktu import WIB, menit_lalu, now_utc, tanggal_geser
 from app.services.entity.complaint_ticket.models import Keluhan, Tiket, TiketRiwayat
 from app.services.entity.financial_ledger.models import TransaksiKas
 from app.services.entity.invoice.models import Invoice
+from app.services.entity.payment.adapters.mock import ALASAN_GAGAL
 from app.services.entity.payment.models import Pembayaran
+from app.services.entity.payment.service import ref_baru
 from app.services.entity.rent_invoice.models import TagihanSewa
 from app.services.entity.technician.models import Teknisi
 from app.services.entity.tenant_lease.models import Pengguna, Properti, Sewa, Unit
@@ -33,8 +35,6 @@ from app.services.micro.technician_matching import Titik, jarak_km
 from app.services.task.hmr.models import Estimasi
 from app.services.utility.media_storage.models import Lampiran
 from app.services.utility.notification.models import Notifikasi
-from app.services.utility.payment_gateway.adapters.mock import ALASAN_GAGAL
-from app.services.utility.payment_gateway.service import ref_baru
 
 PENGGUNA = [
     (1, "Dea", "penghuni", "0812-xxxx-0101", "dea@kosmos.test"),
