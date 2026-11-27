@@ -13,6 +13,8 @@ export const BATAS_LAMPIRAN = {
 /** Sama dengan EKSTENSI di backend media_storage/service.py. */
 export const TIPE_FOTO = ["image/jpeg", "image/png", "image/webp", "image/gif", "image/heic"];
 const TIPE_MEDIA = [...TIPE_FOTO, "video/mp4"];
+/** Foto bukti perbaikan: format yang lolos Evidence Verification (slide D2 "Berformat gambar (JPG, PNG, WebP)"). */
+export const TIPE_BUKTI = ["image/jpeg", "image/png", "image/webp"];
 
 /** Validasi sisi klien (kenyamanan). Backend tetap memvalidasi ulang (422). */
 export function validasiFile(file: File): string | null {

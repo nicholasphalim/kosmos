@@ -124,7 +124,7 @@ export function verifikasiBukti(sebelum: Foto, sesudah: Foto): VerifikasiBukti {
   const dua = [sebelum, sesudah].filter((f): f is NonNullable<Foto> => f !== null);
   const pemeriksaan = [
     { label: "Foto sebelum dan sesudah lengkap", ok: dua.length === 2 },
-    { label: "Berformat gambar (JPG, PNG, WebP)", ok: dua.length > 0 && dua.every((f) => f.mime.startsWith("image/")) },
+    { label: "Berformat gambar (JPG, PNG, WebP)", ok: dua.length > 0 && dua.every((f) => ["image/jpeg", "image/png", "image/webp"].includes(f.mime)) },
     {
       label: "Bukan foto yang sama",
       ok: !(sebelum && sesudah && sebelum.nama_file === sesudah.nama_file && sebelum.ukuran_byte === sesudah.ukuran_byte),

@@ -3,7 +3,7 @@
 import { clsx } from "clsx";
 import { Camera, Check, House, MessageCircle, Send, ShieldCheck, Wrench, X } from "@/components/icons";
 import { useEffect, useId, useMemo, useState } from "react";
-import { TIPE_FOTO, validasiFile } from "@/components/keluhan/MediaPicker";
+import { TIPE_BUKTI, validasiFile } from "@/components/keluhan/MediaPicker";
 import { Button } from "@/components/ui/Button";
 import { useAjukanBiayaTambahan, useCatatLog, useUnggahBukti } from "@/lib/api/hooks";
 import type { WorkOrder } from "@/lib/api/types";
@@ -43,7 +43,7 @@ function FotoSlot({ label, file, onChange, onError }: { label: string; file: Fil
           <input
             id={id}
             type="file"
-            accept={TIPE_FOTO.join(",")}
+            accept={TIPE_BUKTI.join(",")}
             capture="environment"
             aria-label={`Foto ${label.toLowerCase()}`}
             className="sr-only"
