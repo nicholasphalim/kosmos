@@ -157,6 +157,9 @@ def test_skenario_8_biaya_tambahan_sebelum_terima(api):
         api.post(url, headers=slamet, json={"alasan": "x", "jumlah": 40000}).json()["error"]["kode"]
         == "ALASAN_TIDAK_VALID"
     )
+    for salah in ({"alasan": "12345 67890", "jumlah": 40000}, {"alasan": "Kabel tambahan", "jumlah": 40050}):
+        kode = api.post(url, headers=slamet, json=salah).json()["error"]["kode"]
+        assert kode in ("ALASAN_TIDAK_VALID", "JUMLAH_TIDAK_VALID"), salah
     res = api.post(url, headers=slamet, json={"alasan": "Fitting lampu ikut meleleh", "jumlah": 40000})
     assert res.status_code == 201, res.text
     id_tambahan = res.json()["biaya_tambahan"][0]["id"]

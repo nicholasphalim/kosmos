@@ -11,6 +11,7 @@ from datetime import datetime
 from sqlalchemy.orm import Session
 
 from app import views
+from app.core import validasi
 from app.core.errors import ServiceError
 from app.core.format import rupiah
 from app.core.trace import Tracer
@@ -50,6 +51,8 @@ def catat_log(db: Session, user: Pengguna, id_wo: int, aktivitas: str, catatan: 
         raise ServiceError(409, "TIDAK_BISA_MULAI", "Catat kedatangan dulu sebelum mulai memperbaiki.")
     if aktivitas == "catatan" and not _catatan(catatan):
         raise ServiceError(422, "CATATAN_KOSONG", "Catatan tidak boleh kosong.")
+    if aktivitas == "catatan" and not validasi.teks_bermakna(catatan or ""):
+        raise ServiceError(422, "CATATAN_KOSONG", "Tulis catatan dengan kata-kata, bukan hanya angka atau simbol.")
     if aktivitas == "catatan" and wo.status in work_order.DITUTUP:
         raise ServiceError(409, "WORK_ORDER_DITUTUP", "Work order sudah ditutup.")
 
@@ -67,10 +70,12 @@ def ajukan_biaya_tambahan(db: Session, user: Pengguna, id_wo: int, alasan: str, 
     """Teknisi mengajukan biaya di luar estimasi. Pemilik memutuskan lewat Task HMR."""
     wo = views.work_order_untuk(db, user, id_wo)
     teks = alasan.strip()
-    if not 5 <= len(teks) <= 200:
+    if not 5 <= len(teks) <= 200 or not validasi.teks_bermakna(teks):
         raise ServiceError(422, "ALASAN_TIDAK_VALID", "Jelaskan alasan biaya tambahan (5 sampai 200 karakter).")
     if not 1_000 <= jumlah <= 5_000_000:
         raise ServiceError(422, "JUMLAH_TIDAK_VALID", "Biaya tambahan antara Rp 1.000 dan Rp 5.000.000.")
+    if jumlah % 100:
+        raise ServiceError(422, "JUMLAH_TIDAK_VALID", "Biaya tambahan harus kelipatan Rp 100.")
     if wo.status != "dikerjakan":
         raise ServiceError(409, "TIDAK_SEDANG_DIKERJAKAN", "Biaya tambahan diajukan saat perbaikan sedang dikerjakan.")
     if work_order.ada_tambahan_menunggu(db, wo.id):

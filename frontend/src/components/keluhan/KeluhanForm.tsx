@@ -9,6 +9,7 @@ import { IKON_KATEGORI } from "@/components/tiket/Badges";
 import { Button } from "@/components/ui/Button";
 import { LABEL_KATEGORI } from "@/lib/format";
 import { deteksiKategori } from "@/lib/klasifikasi";
+import { teksBermakna } from "@/lib/validasi";
 import { MediaPicker } from "./MediaPicker";
 
 /** Aturan sama dengan KeluhanRequest di kontrak (minLength 10, maxLength 1000). */
@@ -17,7 +18,8 @@ const schema = z.object({
     .string()
     .trim()
     .min(10, "Ceritakan masalahnya minimal 10 karakter.")
-    .max(1000, "Maksimal 1000 karakter."),
+    .max(1000, "Maksimal 1000 karakter.")
+    .refine(teksBermakna, "Ceritakan masalahnya dengan kata-kata, bukan hanya angka atau simbol."),
 });
 
 export type KeluhanInput = { deskripsi: string; lampiran: File[] };

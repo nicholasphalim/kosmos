@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: Kosmos API — Complaint Handling, Repair Verification, Billing & Commission
-  version: 0.3.1
+  version: 0.3.2
   description: |
     Kontrak layanan SOAML untuk proses bisnis Kosmos.
     Autentikasi: Bearer JWT dari Supabase Auth (login Google), atau JWT demo dari /auth/demo-login bila DEMO_MODE=true.
@@ -966,11 +966,14 @@ components:
 
     PenghuniBaruRequest:
       type: object
+      description: >-
+        Periode sewa (juga di SewaBaruRequest): tanggal_selesai setelah tanggal_mulai, belum berakhir,
+        mulai paling lambat 1 tahun dari hari ini, durasi maksimal 5 tahun
       required: [nama, email, no_wa, id_unit, tanggal_mulai, tanggal_selesai]
       properties:
-        nama: { type: string, minLength: 2, maxLength: 100 }
+        nama: { type: string, minLength: 2, maxLength: 100, description: "Huruf, spasi, titik, tanda petik, tanda hubung; diawali huruf, minimal 2 huruf" }
         email: { type: string, format: email, maxLength: 254 }
-        no_wa: { type: string, minLength: 8, maxLength: 20 }
+        no_wa: { type: string, minLength: 8, maxLength: 20, description: "Nomor HP Indonesia (+62, 62, atau 08), 10-13 digit; disimpan sebagai 0812-3456-7890" }
         id_unit: { type: integer }
         tanggal_mulai: { type: string, format: date }
         tanggal_selesai: { type: string, format: date }
@@ -987,9 +990,9 @@ components:
       type: object
       minProperties: 1
       properties:
-        nama: { type: string, minLength: 2, maxLength: 100 }
+        nama: { type: string, minLength: 2, maxLength: 100, description: "Huruf, spasi, titik, tanda petik, tanda hubung; diawali huruf, minimal 2 huruf" }
         email: { type: string, format: email, maxLength: 254 }
-        no_wa: { type: string, minLength: 8, maxLength: 20 }
+        no_wa: { type: string, minLength: 8, maxLength: 20, description: "Nomor HP Indonesia (+62, 62, atau 08), 10-13 digit; disimpan sebagai 0812-3456-7890" }
 
     AkunDemo:
       type: object
@@ -1440,8 +1443,8 @@ components:
       type: object
       required: [alasan, jumlah]
       properties:
-        alasan: { type: string, minLength: 5, maxLength: 200 }
-        jumlah: { type: integer, minimum: 1000, maximum: 5000000 }
+        alasan: { type: string, minLength: 5, maxLength: 200, description: Minimal 3 huruf (bukan hanya angka atau simbol) }
+        jumlah: { type: integer, minimum: 1000, maximum: 5000000, multipleOf: 100 }
 
     PenerimaanRequest:
       type: object

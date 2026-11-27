@@ -11,6 +11,7 @@ from datetime import date
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.core import validasi
 from app.core.errors import ServiceError
 from app.core.waktu import today
 
@@ -50,11 +51,6 @@ def _validasi_email(email: str) -> str:
     if not EMAIL_RE.match(email):
         raise ServiceError(422, "VALIDASI_GAGAL", "Format email tidak valid.")
     return email
-
-
-def _validasi_periode(mulai: date, selesai: date) -> None:
-    if mulai > selesai:
-        raise ServiceError(422, "VALIDASI_GAGAL", "Tanggal selesai sewa harus setelah tanggal mulai.")
 
 
 def _aktif(s: Sewa, hari: date | None = None) -> bool:
@@ -254,14 +250,10 @@ def _email_terpakai(db: Session, email: str) -> bool:
 
 
 def add_penghuni(db: Session, id_pemilik: int, req: PenghuniBaruRequest) -> PenghuniTerdaftar:
-    nama = req.nama.strip()
-    no_wa = req.no_wa.strip()
-    if len(nama) < 2:
-        raise ServiceError(422, "VALIDASI_GAGAL", "Nama minimal 2 karakter.")
-    if len(no_wa) < 8:
-        raise ServiceError(422, "VALIDASI_GAGAL", "Nomor WhatsApp tidak valid.")
+    nama = validasi.nama_orang(req.nama)
+    no_wa = validasi.no_wa_indonesia(req.no_wa)
     email = _validasi_email(req.email)
-    _validasi_periode(req.tanggal_mulai, req.tanggal_selesai)
+    validasi.periode_sewa(req.tanggal_mulai, req.tanggal_selesai)
     _pastikan_unit_milik(db, id_pemilik, req.id_unit)
     if _email_terpakai(db, email):
         raise ServiceError(409, "EMAIL_SUDAH_TERDAFTAR", "Email ini sudah terdaftar.")
@@ -289,12 +281,8 @@ def ubah_penghuni(db: Session, id_pemilik: int, id_pengguna: int, req: UbahPengh
     p, sw = _penghuni_milik(db, id_pemilik, id_pengguna)
     if req.nama is None and req.email is None and req.no_wa is None:
         raise ServiceError(422, "VALIDASI_GAGAL", "Tidak ada data yang diubah.")
-    nama = req.nama.strip() if req.nama is not None else None
-    no_wa = req.no_wa.strip() if req.no_wa is not None else None
-    if nama is not None and len(nama) < 2:
-        raise ServiceError(422, "VALIDASI_GAGAL", "Nama minimal 2 karakter.")
-    if no_wa is not None and len(no_wa) < 8:
-        raise ServiceError(422, "VALIDASI_GAGAL", "Nomor WhatsApp tidak valid.")
+    nama = validasi.nama_orang(req.nama) if req.nama is not None else None
+    no_wa = validasi.no_wa_indonesia(req.no_wa) if req.no_wa is not None else None
     if req.email is not None:
         email = _validasi_email(req.email)
         if email != p.email:
@@ -315,7 +303,7 @@ def ubah_penghuni(db: Session, id_pemilik: int, id_pengguna: int, req: UbahPengh
 
 def add_sewa(db: Session, id_pemilik: int, id_pengguna: int, req: SewaBaruRequest) -> PenghuniTerdaftar:
     p, _ = _penghuni_milik(db, id_pemilik, id_pengguna)
-    _validasi_periode(req.tanggal_mulai, req.tanggal_selesai)
+    validasi.periode_sewa(req.tanggal_mulai, req.tanggal_selesai)
     _pastikan_unit_milik(db, id_pemilik, req.id_unit)
     _pastikan_unit_kosong(db, req.id_unit, req.tanggal_mulai, req.tanggal_selesai)
     bentrok = select(Sewa.id).where(Sewa.id_penghuni == id_pengguna, _beririsan(req.tanggal_mulai, req.tanggal_selesai))

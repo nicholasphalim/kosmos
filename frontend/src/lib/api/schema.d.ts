@@ -751,10 +751,13 @@ export interface components {
             /** @description true bila penghuni sudah pernah login dengan akun Google dari email ini */
             terhubung_google: boolean;
         };
+        /** @description Periode sewa (juga di SewaBaruRequest): tanggal_selesai setelah tanggal_mulai, belum berakhir, mulai paling lambat 1 tahun dari hari ini, durasi maksimal 5 tahun */
         PenghuniBaruRequest: {
+            /** @description Huruf, spasi, titik, tanda petik, tanda hubung; diawali huruf, minimal 2 huruf */
             nama: string;
             /** Format: email */
             email: string;
+            /** @description Nomor HP Indonesia (+62, 62, atau 08), 10-13 digit; disimpan sebagai 0812-3456-7890 */
             no_wa: string;
             id_unit: number;
             /** Format: date */
@@ -770,9 +773,11 @@ export interface components {
             tanggal_selesai: string;
         };
         UbahPenghuniRequest: {
+            /** @description Huruf, spasi, titik, tanda petik, tanda hubung; diawali huruf, minimal 2 huruf */
             nama?: string;
             /** Format: email */
             email?: string;
+            /** @description Nomor HP Indonesia (+62, 62, atau 08), 10-13 digit; disimpan sebagai 0812-3456-7890 */
             no_wa?: string;
         };
         AkunDemo: {
@@ -1061,6 +1066,7 @@ export interface components {
             diputuskan_at: string | null;
         };
         BiayaTambahanRequest: {
+            /** @description Minimal 3 huruf (bukan hanya angka atau simbol) */
             alasan: string;
             jumlah: number;
         };

@@ -53,6 +53,7 @@ import type {
 } from "@/lib/api/types";
 import { jadwal as fmtJadwal, kodeInvoice, kodeTagihanSewa, LABEL_KATEGORI, LABEL_METODE, labelPeriode, rupiah, tanggal } from "@/lib/format";
 import { buatJudul, klasifikasiKeyword } from "@/lib/klasifikasi";
+import { GALAT_NO_WA, galatNama, galatPeriodeSewa, normalisasiNoWa, rapikanNama, teksBermakna } from "@/lib/validasi";
 import {
   commit,
   db,
@@ -315,15 +316,15 @@ export const tenantLease = {
 
   addPenghuni(user: PenggunaRow, req: PenghuniBaruRequest): PenghuniTerdaftar {
     auth.requireRole(user, "pemilik");
-    const nama = req.nama?.trim() ?? "";
+    const galat = galatNama(req.nama ?? "");
+    if (galat) throw new ServiceError(422, "VALIDASI_GAGAL", galat);
+    const nama = rapikanNama(req.nama);
+    const noWa = normalisasiNoWa(req.no_wa ?? "");
+    if (!noWa) throw new ServiceError(422, "VALIDASI_GAGAL", GALAT_NO_WA);
     const email = normalisasiEmail(req.email);
-    const noWa = req.no_wa?.trim() ?? "";
-    if (nama.length < 2) throw new ServiceError(422, "VALIDASI_GAGAL", "Nama minimal 2 karakter.");
     if (!EMAIL_RE.test(email)) throw new ServiceError(422, "VALIDASI_GAGAL", "Format email tidak valid.");
-    if (noWa.length < 8) throw new ServiceError(422, "VALIDASI_GAGAL", "Nomor WhatsApp tidak valid.");
-    if (!req.tanggal_mulai || !req.tanggal_selesai || req.tanggal_mulai > req.tanggal_selesai) {
-      throw new ServiceError(422, "VALIDASI_GAGAL", "Tanggal selesai sewa harus setelah tanggal mulai.");
-    }
+    const galatPeriode = galatPeriodeSewa(req.tanggal_mulai, req.tanggal_selesai);
+    if (galatPeriode) throw new ServiceError(422, "VALIDASI_GAGAL", galatPeriode);
     if (!tenantLease.unitMilik(user.id).some((u) => u.id === req.id_unit)) {
       throw new ServiceError(404, "UNIT_TIDAK_ADA", "Unit tidak ditemukan di properti Anda.");
     }
@@ -357,11 +358,12 @@ export const tenantLease = {
     if (req.nama === undefined && req.email === undefined && req.no_wa === undefined) {
       throw new ServiceError(422, "VALIDASI_GAGAL", "Tidak ada data yang diubah.");
     }
-    const nama = req.nama?.trim();
-    const noWa = req.no_wa?.trim();
+    const galat = req.nama === undefined ? null : galatNama(req.nama);
+    if (galat) throw new ServiceError(422, "VALIDASI_GAGAL", galat);
+    const nama = req.nama === undefined ? undefined : rapikanNama(req.nama);
+    const noWa = req.no_wa === undefined ? undefined : normalisasiNoWa(req.no_wa);
+    if (noWa === null) throw new ServiceError(422, "VALIDASI_GAGAL", GALAT_NO_WA);
     const email = req.email === undefined ? undefined : normalisasiEmail(req.email);
-    if (nama !== undefined && nama.length < 2) throw new ServiceError(422, "VALIDASI_GAGAL", "Nama minimal 2 karakter.");
-    if (noWa !== undefined && noWa.length < 8) throw new ServiceError(422, "VALIDASI_GAGAL", "Nomor WhatsApp tidak valid.");
     if (email !== undefined && email !== p.email) {
       if (!EMAIL_RE.test(email)) throw new ServiceError(422, "VALIDASI_GAGAL", "Format email tidak valid.");
       if (p.auth_user_id !== null) {
@@ -384,9 +386,8 @@ export const tenantLease = {
     if (!tenantLease.sewaTerbaruPerPenghuni(user.id).has(idPengguna)) {
       throw new ServiceError(404, "PENGHUNI_TIDAK_ADA", "Penghuni tidak ditemukan di properti Anda.");
     }
-    if (!req.tanggal_mulai || !req.tanggal_selesai || req.tanggal_mulai > req.tanggal_selesai) {
-      throw new ServiceError(422, "VALIDASI_GAGAL", "Tanggal selesai sewa harus setelah tanggal mulai.");
-    }
+    const galatPeriode = galatPeriodeSewa(req.tanggal_mulai, req.tanggal_selesai);
+    if (galatPeriode) throw new ServiceError(422, "VALIDASI_GAGAL", galatPeriode);
     if (!tenantLease.unitMilik(user.id).some((u) => u.id === req.id_unit)) {
       throw new ServiceError(404, "UNIT_TIDAK_ADA", "Unit tidak ditemukan di properti Anda.");
     }
@@ -725,6 +726,9 @@ export const hmr = {
     if (teks.length < 10 || teks.length > 1000) {
       throw new ServiceError(422, "DESKRIPSI_TIDAK_VALID", "Deskripsi harus 10 sampai 1000 karakter.");
     }
+    if (!teksBermakna(teks)) {
+      throw new ServiceError(422, "DESKRIPSI_TIDAK_VALID", "Ceritakan masalahnya dengan kata-kata, bukan hanya angka atau simbol.");
+    }
     mediaStorage.validasi(files);
 
     const tr = new Tracer();
@@ -880,7 +884,7 @@ export const hmr = {
   async bukaUlang(user: PenggunaRow, idTiket: number, alasan: string): Promise<TiketDetail> {
     auth.requireRole(user, "penghuni");
     const teks = alasan.trim();
-    if (teks.length < 5 || teks.length > 300) {
+    if (teks.length < 5 || teks.length > 300 || !teksBermakna(teks)) {
       throw new ServiceError(422, "ALASAN_TIDAK_VALID", "Ceritakan apa yang masih bermasalah (5 sampai 300 karakter).");
     }
     const t = complaintTicket.getTiketRow(idTiket);
@@ -1552,6 +1556,9 @@ export const csm = {
     if (aktivitas === "catatan" && !(catatan ?? "").trim()) {
       throw new ServiceError(422, "CATATAN_KOSONG", "Catatan tidak boleh kosong.");
     }
+    if (aktivitas === "catatan" && !teksBermakna(catatan ?? "")) {
+      throw new ServiceError(422, "CATATAN_KOSONG", "Tulis catatan dengan kata-kata, bukan hanya angka atau simbol.");
+    }
     if (aktivitas === "catatan" && (wo.status === "selesai" || wo.status === "dibatalkan")) {
       throw new ServiceError(409, "WORK_ORDER_DITUTUP", "Work order sudah ditutup.");
     }
@@ -1568,10 +1575,13 @@ export const csm = {
     auth.requireRole(user, "teknisi");
     const wo = workOrder.getUntuk(user, idWo);
     const teks = alasan.trim();
-    if (teks.length < 5 || teks.length > 200) throw new ServiceError(422, "ALASAN_TIDAK_VALID", "Jelaskan alasan biaya tambahan (5 sampai 200 karakter).");
+    if (teks.length < 5 || teks.length > 200 || !teksBermakna(teks)) {
+      throw new ServiceError(422, "ALASAN_TIDAK_VALID", "Jelaskan alasan biaya tambahan (5 sampai 200 karakter).");
+    }
     if (!Number.isInteger(jumlah) || jumlah < 1_000 || jumlah > 5_000_000) {
       throw new ServiceError(422, "JUMLAH_TIDAK_VALID", "Biaya tambahan antara Rp 1.000 dan Rp 5.000.000.");
     }
+    if (jumlah % 100 !== 0) throw new ServiceError(422, "JUMLAH_TIDAK_VALID", "Biaya tambahan harus kelipatan Rp 100.");
     if (wo.status !== "dikerjakan") throw new ServiceError(409, "TIDAK_SEDANG_DIKERJAKAN", "Biaya tambahan diajukan saat perbaikan sedang dikerjakan.");
     if (workOrder.adaTambahanMenunggu(wo)) throw new ServiceError(409, "MASIH_MENUNGGU", "Masih ada biaya tambahan yang menunggu keputusan pemilik.");
     await delay(jitter(250, 450));
