@@ -67,8 +67,8 @@ test("Skenario 3: Pak Derren memfilter prioritas tinggi lalu membatalkan tiket",
   const daftar = page.getByRole("main");
   const baris = daftar.getByRole("listitem").filter({ hasText: "Stop kontak memercikkan api" });
   await expect(baris.getByRole("link", { name: "Tinjau" })).toBeVisible();
-  page.once("dialog", (d) => d.accept());
   await baris.getByRole("button", { name: "Batalkan TKT-0057" }).click();
+  await page.getByRole("alertdialog").getByRole("button", { name: "Batalkan tiket" }).click();
 
   // Notifikasi status baru muncul di outbox WhatsApp pemilik.
   await expect(page.getByText("Tiket B-201 dibatalkan.")).toBeVisible({ timeout: 10_000 });
@@ -97,13 +97,13 @@ test("Guard: penghuni tidak bisa membuka dashboard pemilik", async ({ page }) =>
 test("Reset data demo lewat tombol di halaman login", async ({ page }) => {
   await masukSebagai(page, "Pak Derren");
   const baris = page.getByRole("main").getByRole("listitem").filter({ hasText: "TKT-0057" });
-  page.once("dialog", (d) => d.accept());
   await baris.getByRole("button", { name: "Batalkan TKT-0057" }).click();
+  await page.getByRole("alertdialog").getByRole("button", { name: "Batalkan tiket" }).click();
   await expect(baris).toBeHidden({ timeout: 10_000 });
 
   await page.getByRole("button", { name: "Keluar" }).click();
-  page.once("dialog", (d) => d.accept());
   await page.getByRole("button", { name: "Reset data demo" }).click();
+  await page.getByRole("alertdialog").getByRole("button", { name: "Reset data" }).click();
 
   await masukSebagai(page, "Pak Derren");
   await expect(

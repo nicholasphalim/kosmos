@@ -125,6 +125,14 @@
   .btn-primary:hover {
     background: linear-gradient(135deg, #5a379f, #311a63);
   }
+  /* Aksi yang membatalkan atau menghapus sesuatu (mis. konfirmasi batalkan tiket). */
+  .btn-bahaya {
+    color: #fff;
+    background: linear-gradient(135deg, #c4241a, #8a140b);
+  }
+  .btn-bahaya:hover {
+    background: linear-gradient(135deg, #d3332a, #9b1a10);
+  }
 
   .text-glow {
     color: transparent;

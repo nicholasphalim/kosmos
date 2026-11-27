@@ -146,11 +146,10 @@ test("Skenario 8: teknisi mengajukan biaya tambahan, pemilik menyetujui sebelum 
 test("Skenario 8b: tiket dibatalkan setelah teknisi tiba, biaya kunjungan ditagihkan ke pemilik", async ({ page }) => {
   await masukSebagai(page, "Pak Derren");
   await page.goto("/pemilik/tiket/51");
-  page.once("dialog", (d) => {
-    expect(d.message()).toContain("biaya kunjungan");
-    void d.accept();
-  });
   await page.getByRole("button", { name: "Batalkan tiket" }).click();
+  const konfirmasi = page.getByRole("alertdialog");
+  await expect(konfirmasi).toContainText("biaya kunjungan");
+  await konfirmasi.getByRole("button", { name: "Batalkan tiket" }).click();
   await expect(page.getByText(/Biaya kunjungan/).first()).toBeVisible({ timeout: 10_000 });
   await page.getByRole("link", { name: "Bayar tagihan" }).click();
   await expect(page.getByRole("heading", { name: "Tagihan biaya kunjungan" })).toBeVisible();

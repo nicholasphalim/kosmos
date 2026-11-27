@@ -16,6 +16,7 @@ import { resetDemo } from "@/lib/demoReset";
 import { useSession } from "@/lib/session";
 import { loginGoogleTersedia, mulaiLoginGoogle } from "@/lib/supabase";
 import { Stiker } from "@/components/ui/Stiker";
+import { KonfirmasiDialog } from "@/components/ui/KonfirmasiDialog";
 
 /** Avatar akun: pemilik memakai ikon orang, penghuni memakai maskot sesuai status sewa. */
 function AvatarAkun({ label }: { label: AkunDemo["label_sewa"] }) {
@@ -71,6 +72,7 @@ export default function LoginPage() {
   const [keGoogle, setKeGoogle] = useState(false);
   // Bila login Google tersedia, akun demo disembunyikan di balik tombol "Coba demo".
   const [demoTerbuka, setDemoTerbuka] = useState(false);
+  const [konfirmasiReset, setKonfirmasiReset] = useState(false);
   const tampilDemo = !loginGoogleTersedia || demoTerbuka;
   // Akun demo hanya ada bila backend berjalan dengan DEMO_MODE; tanpa itu tombol Coba demo tidak tampil.
   const demoTersedia = akun.isSuccess && akun.data.length > 0;
@@ -250,11 +252,7 @@ export default function LoginPage() {
             Data demo berantakan?
             <button
               type="button"
-              onClick={() => {
-                if (window.confirm("Kembalikan semua data demo ke kondisi awal? Tiket dan pesan yang dibuat akan hilang.")) {
-                  void resetDemo();
-                }
-              }}
+              onClick={() => setKonfirmasiReset(true)}
               className="flex min-h-11 cursor-pointer items-center gap-1.5 rounded-lg px-1.5 font-semibold text-navy hover:text-violet"
             >
               <RotateCcw className="size-3.5" aria-hidden />
@@ -265,6 +263,18 @@ export default function LoginPage() {
           )}
         </main>
       </div>
+      <KonfirmasiDialog
+        buka={konfirmasiReset}
+        judul="Reset data demo?"
+        pesan={["Semua data demo kembali ke kondisi awal. Tiket, pembayaran, dan pesan yang sudah dibuat akan hilang untuk semua pengguna."]}
+        labelKonfirmasi="Reset data"
+        bahaya
+        onBatal={() => setKonfirmasiReset(false)}
+        onKonfirmasi={() => {
+          setKonfirmasiReset(false);
+          void resetDemo();
+        }}
+      />
     </div>
   );
 }

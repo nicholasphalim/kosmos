@@ -9,6 +9,7 @@ import { KosmosScene } from "@/components/three/KosmosScene";
 import { TiketFilterBar } from "@/components/pemilik/TiketFilterBar";
 import { TiketPemilikItem } from "@/components/pemilik/TiketPemilikItem";
 import { Button } from "@/components/ui/Button";
+import { KonfirmasiDialog } from "@/components/ui/KonfirmasiDialog";
 import { EmptyState, ErrorState, Skeleton } from "@/components/ui/States";
 import { useKlasifikasiUlang, useTiketList, useUbahStatusTiket, useWorkOrderList } from "@/lib/api/hooks";
 import { useSession } from "@/lib/session";
@@ -28,6 +29,7 @@ export default function PemilikPage() {
   const [tab, setTab] = useState<TabPemilik>("aksi");
   const [urgensi, setUrgensi] = useState<FilterUrgensi>("semua");
   const [cari, setCari] = useState("");
+  const [akanBatal, setAkanBatal] = useState<{ idTiket: number; kode: string } | null>(null);
 
   const semua = tiket.data ?? [];
   const tampil = filterTiketPemilik(semua, { tab, urgensi, cari });
@@ -45,8 +47,7 @@ export default function PemilikPage() {
 
   function jalankan(idTiket: number, kode: string, aksi: "batal" | "klasifikasi") {
     if (aksi === "klasifikasi") return klasifikasi.mutate(idTiket);
-    if (!window.confirm(`Batalkan tiket ${kode}? Penghuni akan dikabari.`)) return;
-    ubahStatus.mutate({ idTiket, status: "dibatalkan" });
+    setAkanBatal({ idTiket, kode });
   }
 
   return (
@@ -162,6 +163,19 @@ export default function PemilikPage() {
           )}
         </aside>
       </div>
+      <KonfirmasiDialog
+        buka={akanBatal !== null}
+        judul={`Batalkan tiket ${akanBatal?.kode ?? ""}?`}
+        pesan={["Laporan ini tidak akan ditindaklanjuti. Penghuni akan dikabari."]}
+        labelKonfirmasi="Batalkan tiket"
+        labelBatal="Kembali"
+        bahaya
+        onBatal={() => setAkanBatal(null)}
+        onKonfirmasi={() => {
+          if (akanBatal) ubahStatus.mutate({ idTiket: akanBatal.idTiket, status: "dibatalkan" });
+          setAkanBatal(null);
+        }}
+      />
     </div>
   );
 }

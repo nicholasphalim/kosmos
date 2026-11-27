@@ -3,9 +3,11 @@
 import { ArrowLeft, X } from "@/components/icons";
 import Link from "next/link";
 import { useParams } from "next/navigation";
+import { useState } from "react";
 import { PerbaikanPemilik } from "@/components/perbaikan/PerbaikanPemilik";
 import { TiketDetailCard } from "@/components/tiket/TiketDetailCard";
 import { Button } from "@/components/ui/Button";
+import { KonfirmasiDialog } from "@/components/ui/KonfirmasiDialog";
 import { ErrorState, Skeleton } from "@/components/ui/States";
 import { ApiError } from "@/lib/api/client";
 import { useTiketDetail, useUbahStatusTiket, useWorkOrderTiket } from "@/lib/api/hooks";
@@ -20,6 +22,7 @@ export default function PemilikTiketPage() {
   const bisaBatal = tiket.data && tiket.data.status !== "selesai" && tiket.data.status !== "dibatalkan";
   // Pembatalan setelah teknisi tiba tetap menerbitkan tagihan biaya kunjungan.
   const sudahTiba = wo.data?.log.some((l) => l.aktivitas === "tiba") && wo.data.status !== "selesai" && wo.data.status !== "dibatalkan";
+  const [konfirmasiBatal, setKonfirmasiBatal] = useState(false);
 
   return (
     <main className="page-rise mx-auto flex max-w-[1240px] flex-col gap-6 px-3 pt-8 pb-16 sm:px-6">
@@ -40,17 +43,7 @@ export default function PemilikTiketPage() {
             icon={<X className="size-4" aria-hidden />}
             className="hover:border-danger-dot/50 hover:bg-danger-bg hover:text-danger"
             title="Untuk laporan salah atau duplikat. Kalau masalahnya sudah kamu atasi, pakai Tangani sendiri."
-            onClick={() => {
-              const pesan = [
-                `Batalkan tiket ${tiket.data!.kode}? Laporan ini tidak akan ditindaklanjuti (mis. salah atau duplikat).`,
-                tiket.data!.status === "diklasifikasi" ? "Kalau masalahnya sudah kamu atasi, pilih “Tangani sendiri” saja." : "",
-                sudahTiba ? "Teknisi sudah datang, jadi biaya kunjungan tetap ditagihkan ke kamu." : "",
-                "Penghuni dan teknisi akan dikabari.",
-              ].filter(Boolean);
-              if (window.confirm(pesan.join("\n\n"))) {
-                batal.mutate({ idTiket, status: "dibatalkan" });
-              }
-            }}
+            onClick={() => setKonfirmasiBatal(true)}
           >
             Batalkan tiket
           </Button>
@@ -78,6 +71,26 @@ export default function PemilikTiketPage() {
             <PerbaikanPemilik tiket={tiket.data} />
           </div>
         </div>
+      )}
+      {tiket.data && (
+        <KonfirmasiDialog
+          buka={konfirmasiBatal}
+          judul={`Batalkan tiket ${tiket.data.kode}?`}
+          pesan={[
+            "Laporan ini tidak akan ditindaklanjuti (mis. salah atau duplikat).",
+            tiket.data.status === "diklasifikasi" ? "Kalau masalahnya sudah kamu atasi, pilih “Tangani sendiri” saja." : "",
+            sudahTiba ? "Teknisi sudah datang, jadi biaya kunjungan tetap ditagihkan ke kamu." : "",
+            "Penghuni dan teknisi akan dikabari.",
+          ].filter(Boolean)}
+          labelKonfirmasi="Batalkan tiket"
+          labelBatal="Kembali"
+          bahaya
+          onBatal={() => setKonfirmasiBatal(false)}
+          onKonfirmasi={() => {
+            batal.mutate({ idTiket, status: "dibatalkan" });
+            setKonfirmasiBatal(false);
+          }}
+        />
       )}
     </main>
   );
