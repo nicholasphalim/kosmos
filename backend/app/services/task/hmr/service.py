@@ -129,7 +129,7 @@ def ajukan_keluhan(db: Session, user: Pengguna, deskripsi: str, files: list[File
         id_unit = tenant_lease.get_id_unit(db, user.id)
         s.operasi = f"getIdUnit(penghuni={user.id}) → {id_unit}"
     with tr.step("Tenant and Lease", "Entity", "getStatusSewa") as s:
-        sewa = tenant_lease.get_status_sewa(db, id_unit)
+        sewa = tenant_lease.get_status_sewa(db, id_unit, user.id)
         s.operasi = f"getStatusSewa(unit={id_unit}) → {sewa.status_sewa}"
 
     # Cabang BPMN: sewa tidak aktif -> keluhan ditolak, tidak ada tiket.

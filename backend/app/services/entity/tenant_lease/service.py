@@ -140,9 +140,14 @@ def get_id_unit(db: Session, id_penghuni: int) -> int:
     return sewa.id_unit
 
 
-def get_status_sewa(db: Session, id_unit: int) -> StatusSewa:
-    """Get Status Sewa: dari sewa terbaru unit; aktif bila hari ini (WIB) di antara mulai dan selesai."""
-    sewa = _sewa_terbaru(db, id_unit=id_unit)
+def get_status_sewa(db: Session, id_unit: int, id_penghuni: int | None = None) -> StatusSewa:
+    """Get Status Sewa: aktif bila hari ini (WIB) di antara mulai dan selesai.
+
+    Dengan `id_penghuni`: sewa terbaru penghuni itu di unit tersebut. Unit bisa sudah disewa orang lain, dan sewa
+    penghuni baru tidak boleh membuat sewa penghuni lama ikut dianggap aktif. Tanpa `id_penghuni`: sewa terbaru unit.
+    """
+    filter_ = {"id_unit": id_unit} if id_penghuni is None else {"id_unit": id_unit, "id_penghuni": id_penghuni}
+    sewa = _sewa_terbaru(db, **filter_)
     if sewa is None:
         raise ServiceError(404, "SEWA_TIDAK_ADA", "Unit belum pernah disewa.")
     return _status(sewa)
@@ -157,13 +162,15 @@ def status_sewa_untuk(db: Session, user: Pengguna, id_unit: int) -> StatusSewa:
     penyewa = db.scalars(select(Sewa.id).where(Sewa.id_unit == id_unit, Sewa.id_penghuni == user.id)).first()
     if not pemilik and penyewa is None:
         raise tidak_ada
-    return get_status_sewa(db, id_unit)
+    # Penghuni (termasuk penghuni lama) hanya melihat sewanya sendiri, bukan sewa penghuni berikutnya.
+    return get_status_sewa(db, id_unit, None if pemilik else user.id)
 
 
 def profil(db: Session, id_penghuni: int) -> ProfilPenghuni:
     p = get_pengguna(db, id_penghuni)
     id_unit = get_id_unit(db, id_penghuni)
-    return ProfilPenghuni(pengguna=to_pengguna(p), unit=unit_ringkas(db, id_unit), sewa=get_status_sewa(db, id_unit))
+    sewa = get_status_sewa(db, id_unit, id_penghuni)
+    return ProfilPenghuni(pengguna=to_pengguna(p), unit=unit_ringkas(db, id_unit), sewa=sewa)
 
 
 def _sewa_aktif_unit(db: Session, id_unit: int) -> Sewa | None:
