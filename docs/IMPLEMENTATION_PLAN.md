@@ -319,7 +319,7 @@ Aturan umum:
 - **Kode status:** 401 untuk token tidak ada, salah, atau kedaluwarsa. 403 untuk role salah atau email Google yang belum terdaftar (`EMAIL_BELUM_TERDAFTAR`). 404 untuk data yang tidak ada atau bukan miliknya. 409 untuk transisi status ilegal dan data bentrok. 422 untuk validasi gagal.
 - **Otorisasi data:** daftar otomatis difilter. Penghuni hanya melihat tiket dan tagihan sewa miliknya. Pemilik hanya melihat data dari properti miliknya. Teknisi hanya melihat work order yang ditugaskan kepadanya.
 - **Privasi:** skema `Pengguna` yang muncul di tiket, work order, dan invoice tidak memuat email atau nomor WhatsApp. Email hanya muncul di `/auth/me` (milik sendiri) dan daftar penghuni milik pemilik.
-- **Batas lampiran (generik, belum ada di D1, konfirmasi ke kelompok):** maksimal 3 file. Gambar jpg/png/webp maksimal 5 MB. Video mp4 maksimal 20 MB. Hanya gambar yang dihitung untuk AI.
+- **Batas lampiran:** maksimal 5 file (service contract Layanan Pengajuan Keluhan di D2). Gambar jpg/png/webp maksimal 5 MB. Video mp4 maksimal 20 MB. Hanya gambar yang dihitung untuk AI.
 
 ---
 
@@ -443,7 +443,7 @@ Urgensi: `korslet|percikan|memercik|api|banjir|gosong|asap|setrum` → tinggi; `
 
 ### 6.6 Alur satu klik, dari UI sampai DB (mode live)
 
-1. Penghuni menekan **Kirim laporan**. React Hook Form menjalankan skema Zod (deskripsi minimal 10 karakter, maksimal 3 file, cek ukuran dan tipe file).
+1. Penghuni menekan **Kirim laporan**. React Hook Form menjalankan skema Zod (deskripsi minimal 10 karakter, maksimal 5 file, cek ukuran dan tipe file).
 2. `useAjukanKeluhan` (useMutation) membangun `FormData` dan memanggil `api.POST("/hmr/keluhan")`. Client menambahkan header `Authorization: Bearer <jwt>`.
 3. FastAPI mencocokkan router HMR. Dependency `current_user` memverifikasi JWT dan mencari pengguna. Jika gagal, response 401 atau 403. Jika role bukan penghuni, response 403.
 4. FastAPI memvalidasi form multipart. Jika tidak valid, response 422.
@@ -723,10 +723,10 @@ D2 final (Kelompok 11) sudah dikumpulkan dan dipresentasikan. Hal yang sudah ter
 - Penyimpangan desain §2: Task HMR memanggil Notification (slide arsitektur komposisi layanan), BPMN Complaint Handling memvalidasi sewa sebelum tiket dibuat.
 - Pemilik membayar perbaikan: BPMN dan SoaML Billing memakai Pemilik sebagai pembayar, invoice terbit setelah pemilik menerima hasil.
 - BPMN Repair Verification: gateway "Perlu teknisi?", "Disetujui? Tidak" kembali ke tinjau tiket, biaya tambahan, dan penerimaan pemilik.
+- Batas lampiran keluhan 5 file, sesuai service contract Layanan Pengajuan Keluhan (UI dan backend sebelumnya memakai 3).
 - Rent Billing sebagai proses tambahan (slide Tagihan Sewa Bulanan): jatuh tempo tanggal 10, diterbitkan manual oleh pemilik.
 
 Yang masih terbuka:
-1. **Batas lampiran keluhan.** Service contract Layanan Pengajuan Keluhan di D2 menyebut maksimal 5 lampiran, sedangkan UI (slide Lapor Kerusakan) dan backend memakai 3. Salah satunya perlu disamakan.
-2. **Jumlah endpoint.** Slide Dokumentasi API D2 menyebut 35 endpoint dan "backend FastAPI direncanakan". Kontrak sekarang berisi 42 operasi. Tambahan 7 operasinya: `GET /auth/me` (login Google), `GET /pemilik/unit`, `GET/POST /pemilik/penghuni`, `PATCH /pemilik/penghuni/{id}`, `POST /pemilik/penghuni/{id}/sewa` (pendaftaran penghuni dan sewa lagi, §11b #9), dan `POST /dev/reset`. Backend FastAPI juga sudah berjalan. Perlu diperbarui bila ada deliverable berikutnya.
-3. **Denda keterlambatan sewa** belum ada.
-4. **Akses dosen ke demo live:** tambahkan Gmail dosen sebagai test user OAuth, atau cukup demo login.
+1. **Jumlah endpoint.** Slide Dokumentasi API D2 menyebut 35 endpoint dan "backend FastAPI direncanakan". Kontrak sekarang berisi 42 operasi. Tambahan 7 operasinya: `GET /auth/me` (login Google), `GET /pemilik/unit`, `GET/POST /pemilik/penghuni`, `PATCH /pemilik/penghuni/{id}`, `POST /pemilik/penghuni/{id}/sewa` (pendaftaran penghuni dan sewa lagi, §11b #9), dan `POST /dev/reset`. Backend FastAPI juga sudah berjalan. Perlu diperbarui bila ada deliverable berikutnya.
+2. **Denda keterlambatan sewa** belum ada.
+3. **Akses dosen ke demo live:** tambahkan Gmail dosen sebagai test user OAuth, atau cukup demo login.

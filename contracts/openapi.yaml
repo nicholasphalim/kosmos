@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: Kosmos API — Complaint Handling, Repair Verification, Billing & Commission
-  version: 0.3.0
+  version: 0.3.1
   description: |
     Kontrak layanan SOAML untuk proses bisnis Kosmos.
     Autentikasi: Bearer JWT dari Supabase Auth (login Google), atau JWT demo dari /auth/demo-login bila DEMO_MODE=true.
@@ -1049,7 +1049,7 @@ components:
         deskripsi: { type: string, minLength: 10, maxLength: 1000 }
         lampiran:
           type: array
-          maxItems: 3
+          maxItems: 5
           items: { type: string, format: binary }
 
     Lampiran:

@@ -569,13 +569,13 @@ export const complaintTicket = {
 /* Utility: Media Storage                                                 */
 /* ===================================================================== */
 
-const BATAS = { maksFile: 3, gambar: 5 * 1024 * 1024, video: 20 * 1024 * 1024 };
+const BATAS = { maksFile: 5, gambar: 5 * 1024 * 1024, video: 20 * 1024 * 1024 };
 const TIPE_MEDIA = ["image/jpeg", "image/png", "image/webp", "image/gif", "image/heic", "video/mp4"];
 
 export const mediaStorage = {
   validasi(files: File[]) {
     if (files.length > BATAS.maksFile) {
-      throw new ServiceError(422, "LAMPIRAN_TERLALU_BANYAK", "Maksimal 3 file lampiran.");
+      throw new ServiceError(422, "LAMPIRAN_TERLALU_BANYAK", `Maksimal ${BATAS.maksFile} file lampiran.`);
     }
     for (const f of files) {
       // Daftar tipe sama dengan EKSTENSI di backend media_storage/service.py.

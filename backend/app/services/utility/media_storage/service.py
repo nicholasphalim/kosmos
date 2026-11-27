@@ -17,7 +17,7 @@ from app.core.waktu import now_utc
 from .adapters import local, supabase
 from .models import Lampiran
 
-MAKS_FILE = 3
+MAKS_FILE = 5  # sesuai service contract Layanan Pengajuan Keluhan di D2
 BATAS_GAMBAR = 5 * 1024 * 1024
 BATAS_VIDEO = 20 * 1024 * 1024
 # Hanya tipe ini yang diterima. Ekstensi file selalu diambil dari sini, bukan dari nama file kiriman klien,
@@ -62,7 +62,7 @@ def _adapter():
 
 def validasi(files: list[FileMasuk]) -> None:
     if len(files) > MAKS_FILE:
-        raise ServiceError(422, "LAMPIRAN_TERLALU_BANYAK", "Maksimal 3 file lampiran.")
+        raise ServiceError(422, "LAMPIRAN_TERLALU_BANYAK", f"Maksimal {MAKS_FILE} file lampiran.")
     for f in files:
         if f.mime not in EKSTENSI:
             raise ServiceError(

@@ -39,7 +39,7 @@ settings = get_settings()
 
 app = FastAPI(
     title="Kosmos API",
-    version="0.3.0",
+    version="0.3.1",
     description=(
         "Service SOA Kosmos. Tag menunjukkan layer: Task, Entity, Utility. "
         "Microservice dipanggil in-process oleh Task sehingga tidak punya endpoint sendiri."

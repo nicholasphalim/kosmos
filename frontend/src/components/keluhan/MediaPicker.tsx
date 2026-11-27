@@ -5,7 +5,7 @@ import { useEffect, useId, useMemo } from "react";
 import { ukuranFile } from "@/lib/format";
 
 export const BATAS_LAMPIRAN = {
-  maksFile: 3,
+  maksFile: 5,
   gambarByte: 5 * 1024 * 1024,
   videoByte: 20 * 1024 * 1024,
 } as const;
