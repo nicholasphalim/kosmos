@@ -29,6 +29,12 @@ test("Skenario 12: pemilik mendaftarkan penghuni baru di unit kosong", async ({ 
 
   await expect(page.getByRole("status")).toContainText("Anggota Baru terdaftar di A-102");
   await expect(page.getByText("anggota.baru@gmail.com · 0812-0000-1111")).toBeVisible();
+
+  // Sewa penghuni baru di A-102 tidak boleh membuat sewa Qiqa (penghuni lama A-102) ikut aktif.
+  await page.getByRole("button", { name: "Keluar" }).click();
+  await page.getByRole("tab", { name: "Penghuni" }).click();
+  await page.getByRole("button", { name: /Qiqa/ }).click();
+  await expect(page.getByRole("main").getByText("Sewa berakhir", { exact: true })).toBeVisible();
 });
 
 test("Pendaftaran ditolak bila email sudah terdaftar", async ({ page }) => {
