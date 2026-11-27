@@ -70,6 +70,27 @@ def test_tambah_penghuni_ditolak(api):
         (_baru(email="bukan-email"), 422, "VALIDASI_GAGAL"),
         (_baru(tanggal_mulai="2027-01-01", tanggal_selesai="2026-01-01"), 422, "VALIDASI_GAGAL"),
         (_baru(nama="A"), 422, "VALIDASI_GAGAL"),
+        (_baru(nama="12345"), 422, "VALIDASI_GAGAL"),
+        (_baru(nama="Budi_99"), 422, "VALIDASI_GAGAL"),
+        (_baru(no_wa="abcdefgh"), 422, "VALIDASI_GAGAL"),
+        (_baru(no_wa="12345678"), 422, "VALIDASI_GAGAL"),
+        (_baru(no_wa="0812-34"), 422, "VALIDASI_GAGAL"),
+        (
+            _baru(tanggal_mulai=tanggal_geser(1).isoformat(), tanggal_selesai=tanggal_geser(1).isoformat()),
+            422,
+            "VALIDASI_GAGAL",
+        ),
+        (
+            _baru(tanggal_mulai=tanggal_geser(-60).isoformat(), tanggal_selesai=tanggal_geser(-1).isoformat()),
+            422,
+            "VALIDASI_GAGAL",
+        ),
+        (
+            _baru(tanggal_mulai=tanggal_geser(400).isoformat(), tanggal_selesai=tanggal_geser(800).isoformat()),
+            422,
+            "VALIDASI_GAGAL",
+        ),
+        (_baru(tanggal_selesai=tanggal_geser(6 * 366).isoformat()), 422, "VALIDASI_GAGAL"),
     ]
     for body, status, kode in kasus:
         res = api.post(f"{V}/pemilik/penghuni", headers=h, json=body)
@@ -130,3 +151,11 @@ def test_sewa_lagi_ditolak(api):
     for id_, body, status, kode in kasus:
         res = api.post(f"{V}/pemilik/penghuni/{id_}/sewa", headers=h, json=body)
         assert (res.status_code, res.json()["error"]["kode"]) == (status, kode), (id_, body)
+
+
+def test_nama_dan_nomor_wa_dinormalisasi(api):
+    body = _baru(nama="  Indanna   Halwah Raqiqah M. ", no_wa="+62 812 3456 7890")
+    res = api.post(f"{V}/pemilik/penghuni", headers=login_demo(api, 4), json=body)
+    assert res.status_code == 201, res.text
+    assert res.json()["pengguna"]["nama"] == "Indanna Halwah Raqiqah M."
+    assert res.json()["no_wa"] == "0812-3456-7890"

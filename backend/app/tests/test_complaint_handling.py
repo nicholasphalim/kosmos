@@ -59,6 +59,7 @@ def test_skenario_2_sewa_berakhir_ditolak(api):
 
 def test_validasi_keluhan(api):
     assert _ajukan(api, 1, "pendek").json()["error"]["kode"] == "DESKRIPSI_TIDAK_VALID"
+    assert _ajukan(api, 1, "1234567890 !!!").json()["error"]["kode"] == "DESKRIPSI_TIDAK_VALID"
     assert _ajukan(api, 1, "AC kamar tidak dingin", [FOTO] * 6).json()["error"]["kode"] == "LAMPIRAN_TERLALU_BANYAK"
     pdf = ("x.pdf", b"%PDF", "application/pdf")
     assert _ajukan(api, 1, "AC kamar tidak dingin", [pdf]).json()["error"]["kode"] == "TIPE_FILE_DITOLAK"

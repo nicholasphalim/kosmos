@@ -11,6 +11,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app import views
+from app.core import validasi
 from app.core.errors import ServiceError
 from app.core.format import LABEL_KATEGORI, jadwal, rupiah, tanggal
 from app.core.trace import Tracer
@@ -115,6 +116,10 @@ def ajukan_keluhan(db: Session, user: Pengguna, deskripsi: str, files: list[File
     teks = deskripsi.strip()
     if not 10 <= len(teks) <= 1000:
         raise ServiceError(422, "DESKRIPSI_TIDAK_VALID", "Deskripsi harus 10 sampai 1000 karakter.")
+    if not validasi.teks_bermakna(teks):
+        raise ServiceError(
+            422, "DESKRIPSI_TIDAK_VALID", "Ceritakan masalahnya dengan kata-kata, bukan hanya angka atau simbol."
+        )
     media_storage.validasi(files)
 
     tr = Tracer()
@@ -253,7 +258,7 @@ def klasifikasi_ulang(db: Session, user: Pengguna, id_tiket: int) -> TiketDetail
 def buka_ulang(db: Session, user: Pengguna, id_tiket: int, alasan: str) -> TiketDetail:
     """Penghuni membuka ulang tiket yang ditutup pemilik tanpa teknisi -> kembali ke tahap tinjau pemilik."""
     teks = alasan.strip()
-    if not 5 <= len(teks) <= 300:
+    if not 5 <= len(teks) <= 300 or not validasi.teks_bermakna(teks):
         raise ServiceError(422, "ALASAN_TIDAK_VALID", "Ceritakan apa yang masih bermasalah (5 sampai 300 karakter).")
     t = views.tiket_untuk(db, user, id_tiket)
     if not complaint_ticket.bisa_dibuka_ulang(db, t):

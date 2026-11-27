@@ -53,18 +53,19 @@ class PenghuniTerdaftar(BaseModel):
 
 
 class PenghuniBaruRequest(BaseModel):
-    nama: str = Field(min_length=2, max_length=100)
+    # Format nama dan nomor WhatsApp diperiksa service (app/core/validasi.py) agar pesan error-nya jelas.
+    nama: str = Field(max_length=100)
     email: str = Field(max_length=254)
-    no_wa: str = Field(min_length=8, max_length=20)
+    no_wa: str = Field(max_length=20)
     id_unit: int
     tanggal_mulai: date
     tanggal_selesai: date
 
 
 class UbahPenghuniRequest(BaseModel):
-    nama: str | None = Field(default=None, min_length=2, max_length=100)
+    nama: str | None = Field(default=None, max_length=100)
     email: str | None = Field(default=None, max_length=254)
-    no_wa: str | None = Field(default=None, min_length=8, max_length=20)
+    no_wa: str | None = Field(default=None, max_length=20)
 
 
 class SewaBaruRequest(BaseModel):
